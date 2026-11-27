@@ -2,6 +2,7 @@
 import datetime
 import os
 import subprocess
+import tempfile
 import sys
 from pathlib import Path
 
@@ -31,6 +32,9 @@ def puede_eliminar(ruta) -> tuple[bool, str]:
         return False, "ese archivo ya no existe"
     if r == _norm(Path.home()) or os.path.dirname(r) == r:
         return False, "no borro carpetas raíz ni tu carpeta personal"
+    temporal = _norm(tempfile.gettempdir())
+    if r.startswith(temporal + os.sep):
+        return True, ""  # los archivos temporales sí se pueden mandar a la papelera
     for prot in _RUTAS_PROTEGIDAS:
         if not prot:
             continue
