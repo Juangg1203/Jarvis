@@ -11,9 +11,14 @@
 
   <main class="marco">
     <header class="barra">
-      <span class="titulo">J.A.R.V.I.S</span>
-      <span class="estado-punto" id="punto"></span>
-      <span class="estado-texto" id="estadoTexto">Iniciando…</span>
+      <div class="marca">
+        <img class="logo" src="assets/expresiones/normal.png" alt="">
+        <div class="marca-texto">
+          <span class="titulo">J.A.R.V.I.S</span>
+          <span class="saludo" id="saludo">Hola</span>
+        </div>
+      </div>
+      <nav class="herramientas">
       <button class="icono-btn" id="btnVigilar" title="Vigilar el computador mientras no estás" aria-label="Vigilar">
         <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M12 2 4 5v6c0 5 3.4 9.7 8 11 4.6-1.3 8-6 8-11V5Zm0 5a3 3 0 1 1 0 6 3 3 0 0 1 0-6Zm0 13c-2-.7-3.7-2.1-4.8-4 .9-1.4 2.8-2.3 4.8-2.3s3.9.9 4.8 2.3c-1.1 1.9-2.8 3.3-4.8 4Z"/></svg>
       </button>
@@ -27,8 +32,13 @@
       <button class="icono-btn" id="btnAjustes" title="Ajustes" aria-label="Ajustes">
         <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.3 7.3 0 0 0-1.7-1L15 3.3h-4l-.4 2.6a7.3 7.3 0 0 0-1.7 1l-2.5-1-2 3.5L6.5 11a7.6 7.6 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1a7.3 7.3 0 0 0 1.7 1l.4 2.6h4l.4-2.6a7.3 7.3 0 0 0 1.7-1l2.5 1 2-3.5ZM13 15.5A3.5 3.5 0 1 1 13 8.5a3.5 3.5 0 0 1 0 7Z" transform="translate(-1 0)"/></svg>
       </button>
-      <button class="icono-btn" id="btnOcultar" title="Seguir en segundo plano" aria-label="Ocultar">—</button>
+      <button class="icono-btn" id="btnOcultar" title="Seguir en segundo plano" aria-label="Ocultar">
+        <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M5 11h14v2H5z"/></svg>
+      </button>
+      </nav>
     </header>
+
+    <div class="estado-chip" id="estadoChip"><span class="estado-punto" id="punto"></span><span class="estado-texto" id="estadoTexto">Iniciando…</span></div>
 
     <!-- Escena 3D del holograma -->
     <section class="escena" id="escena">
@@ -66,18 +76,30 @@
     <section class="chat" id="chat"></section>
     <ul class="resultados" id="resultados"></ul>
 
-    <form class="entrada" id="formulario">
-      <input id="texto" autocomplete="off" placeholder="Escríbele a Jarvis…">
-      <button type="submit" class="enviar" aria-label="Enviar">
-        <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M3 20.5 21 12 3 3.5v6.6l12 1.9-12 1.9z"/></svg>
-      </button>
-    </form>
+    <div class="dock">
+      <div class="atajos" id="atajos">
+        <button type="button" data-texto="¿Qué clima hace hoy?">🌤️ Clima</button>
+        <button type="button" data-texto="Dame las noticias">📰 Noticias</button>
+        <button type="button" data-completar="Pon en YouTube ">🎵 Música</button>
+        <button type="button" data-texto="¿Tengo mensajes nuevos?">💬 Mensajes</button>
+        <button type="button" data-texto="Ordena mis descargas por tipo">🗂️ Ordenar descargas</button>
+        <button type="button" data-texto="¿Qué hay en mi pantalla?">🖥️ Mi pantalla</button>
+        <button type="button" data-completar="Recuérdame en 20 minutos ">⏰ Recordatorio</button>
+        <button type="button" data-texto="Dicta un documento">📝 Dictar</button>
+      </div>
+      <form class="entrada" id="formulario">
+        <input id="texto" autocomplete="off" placeholder="Escríbele a Jarvis…">
+        <button type="submit" class="enviar" aria-label="Enviar">
+          <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M3 20.5 21 12 3 3.5v6.6l12 1.9-12 1.9z"/></svg>
+        </button>
+      </form>
+    </div>
   </main>
 
   <!-- Panel de ajustes -->
   <aside class="ajustes" id="panelAjustes" hidden>
     <div class="ajustes-caja agenda">
-      <h2>Ajustes</h2>
+      <div class="cabeza"><h2>Ajustes</h2><button type="button" class="cerrar" data-cerrar aria-label="Cerrar">✕</button></div>
       <label>Cerebro para conversar
         <select id="proveedor">
           <option value="gemini">Gemini de Google (gratis)</option>
@@ -105,7 +127,15 @@
           <option value="windows">Voz de Windows</option>
         </select>
       </label>
-      <label>Colores
+      <div class="campo">Colores
+        <div class="temas" id="temas" role="radiogroup" aria-label="Colores">
+          <button type="button" data-tema="aurora" title="Aurora"><i></i>Aurora</button>
+          <button type="button" data-tema="oceano" title="Océano"><i></i>Océano</button>
+          <button type="button" data-tema="esmeralda" title="Esmeralda"><i></i>Esmeralda</button>
+          <button type="button" data-tema="atardecer" title="Atardecer"><i></i>Atardecer</button>
+        </div>
+      </div>
+      <label hidden>Colores
         <select id="tema">
           <option value="aurora">Aurora (multicolor)</option>
           <option value="oceano">Océano (azul original)</option>
@@ -148,7 +178,7 @@
   <!-- Panel de agenda: recordatorios, rutinas y memoria -->
   <aside class="ajustes" id="panelAgenda" hidden>
     <div class="ajustes-caja agenda">
-      <h2>Tu agenda</h2>
+      <div class="cabeza"><h2>Tu agenda</h2><button type="button" class="cerrar" data-cerrar aria-label="Cerrar">✕</button></div>
       <section>
         <h3>Recordatorios y alarmas</h3>
         <ul class="lista" id="listaAvisos"></ul>

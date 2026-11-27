@@ -24,6 +24,10 @@
   function ponerTema(tema) {
     document.body.dataset.tema = tema || "aurora";
     try { localStorage.setItem("jarvisTema", document.body.dataset.tema); } catch (e) {}
+    document.querySelectorAll("#temas [data-tema]").forEach((b) => {
+      const si = b.dataset.tema === document.body.dataset.tema;
+      b.classList.toggle("activo", si); b.setAttribute("aria-checked", si);
+    });
     leerColores();
   }
   try { ponerTema(localStorage.getItem("jarvisTema")); } catch (e) { ponerTema("aurora"); }
@@ -388,8 +392,28 @@
 
   window.addEventListener("pywebviewready", async () => {
     window.jarvis.actualizar({ estado: "esperando" });
-    try { const a = await api().leer_ajustes(); ponerTema(a.tema); window.jarvis.actualizar({ vigilando: a.vigilando }); } catch (e) {}
+    try { const a = await api().leer_ajustes(); ponerTema(a.tema); nombre = a.nombre || ""; saludar(); window.jarvis.actualizar({ vigilando: a.vigilando }); } catch (e) {}
   });
+
+  // ---------- diseño: saludo, atajos, colores y cerrar paneles ----------
+  let nombre = "";
+  function saludar() {
+    const h = new Date().getHours();
+    const parte = h < 5 ? "Buenas noches" : h < 12 ? "Buenos días" : h < 19 ? "Buenas tardes" : "Buenas noches";
+    const hora = new Date().toLocaleTimeString("es", { hour: "numeric", minute: "2-digit" });
+    $("saludo").textContent = parte + (nombre ? ", " + nombre : "") + " · " + hora;
+  }
+  saludar(); setInterval(saludar, 20000);
+  document.querySelectorAll("#atajos button").forEach((b) => b.onclick = () => {
+    const caja = $("texto");
+    if (b.dataset.completar) { caja.value = b.dataset.completar; caja.focus(); return; }
+    if (api()) { api().enviar_texto(b.dataset.texto); }
+  });
+  document.querySelectorAll("#temas [data-tema]").forEach((b) => b.onclick = () => {
+    $("tema").value = b.dataset.tema; ponerTema(b.dataset.tema);
+  });
+  document.querySelectorAll("[data-cerrar]").forEach((b) => b.onclick = () => { b.closest(".ajustes").hidden = true; });
+  ponerTema(document.body.dataset.tema);
 
   // Modo demostración al abrir index.html en un navegador normal.
   setTimeout(() => {
@@ -406,7 +430,7 @@
     window.pywebview = { api: {
       enviar_texto: (t) => { jarvis.actualizar({ estado: "pensando", orden: t }); setTimeout(() => hablar("(Demo) Hola, soy Jarvis. Recibí: " + t, "guino"), 700); },
       escuchar: () => jarvis.actualizar({ estado: "escuchando" }), callar() {}, ocultar() {}, abrir_resultado() {},
-      leer_ajustes: async () => ({ tiene_clave: false, proveedor: "gemini", tiene_gemini: true, gemini_final: "x9Qk", voz_motor: "piper", modo_conversacion: true, tema: document.body.dataset.tema,
+      leer_ajustes: async () => ({ nombre: "Juan", tiene_clave: false, proveedor: "gemini", tiene_gemini: true, gemini_final: "x9Qk", voz_motor: "piper", modo_conversacion: true, tema: document.body.dataset.tema,
         conoce_voz: true, conoce_cara: false, solo_dueno: true, avisos_seguridad: true, celular: true, celular_activo: true,
         celular_direccion: "http://192.168.1.20:8765/",
         celular_qr: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 21 21"><path d="M1 1h7v7H1zM13 1h7v7h-7zM1 13h7v7H1zM10 3h2v2h-2zM10 9h3v2h-3zM15 11h2v3h-2zM10 14h2v5h-2zM14 16h5v2h-5z"/></svg>' }),
