@@ -63,6 +63,13 @@
   // onda de sonido dentro, caras según el ánimo y partículas al hablar.
   // =====================================================================
   const orbe = $("orbe"), ctx = orbe.getContext("2d");
+  // Modo ligero (portátiles de 8 GB o menos): sin sombras difuminadas y a 30 cuadros por segundo.
+  // Las sombras del lienzo piden mucha memoria de gráficos en cada cuadro.
+  const LIGERO = (navigator.deviceMemory || 16) <= 8 || /[?&]ligero/.test(location.search);
+  function sinSombras(c) {
+    if (LIGERO) Object.defineProperty(c, "shadowBlur", { set() {}, get() { return 0; } });
+  }
+  sinSombras(ctx);
   let OW = 0, OH = 0;
   function tamOrbe() {
     const dpr = window.devicePixelRatio || 1, r = orbe.getBoundingClientRect();
@@ -313,12 +320,16 @@
 
   // ---------- onda de voz y fondo ----------
   const onda = $("onda"), octx = onda.getContext("2d");
+  sinSombras(octx);
+  let cuadro = 0;
   let nivelObjetivo = 0, nivel = 0, t = 0;
 
   let nivelCss = -1;
   function dibujar() {
     // con la ventana escondida en la bandeja no se dibuja nada (ahorra memoria y batería)
     if (document.hidden) { setTimeout(() => requestAnimationFrame(dibujar), 500); return; }
+    if (LIGERO && (cuadro++ & 1)) { requestAnimationFrame(dibujar); return; }
+    if (LIGERO) t += 1 / 60;  // el tiempo sigue igual aunque se dibuje la mitad de veces
     t += 1 / 60;
     // suavizado: la voz sube rápido y baja despacio, como un medidor real
     nivel += (nivelObjetivo - nivel) * (nivelObjetivo > nivel ? 0.45 : 0.12);

@@ -199,7 +199,11 @@ def test_ollama_corto_y_precalentado(monkeypatch):
     ajustes.guardar({"ollama_modelo": "qwen2.5:1.5b"})
     assert ollama.modelo() == "qwen2.5:1.5b"
     ajustes.guardar({"ollama_modelo": ""})
+    from jarvis import equipo
+    monkeypatch.setattr(equipo, "ram_total_gb", lambda: 16.0)
+    ollama._LIGERO.clear()
     assert ollama.modelo() == ollama.config.MODELO_OLLAMA
+    ollama._LIGERO.clear()
 
 
 def test_en_linea_se_guarda_un_rato(monkeypatch):
