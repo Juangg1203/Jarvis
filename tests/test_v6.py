@@ -278,3 +278,23 @@ def test_modo_solo_local_no_usa_internet():
         assert "solo local" in r.texto
     finally:
         ajustes.guardar({"proveedor": "auto"})
+
+
+def test_pedidos_de_documento_en_word(monkeypatch):
+    import sys, types
+    monkeypatch.setitem(sys.modules, "webview", sys.modules.get("webview") or types.ModuleType("webview"))
+    from jarvis.main import Jarvis
+    r = Jarvis._RE_DOCUMENTO
+    for frase in ("crea un documento en word sobre la segunda guerra mundial",
+                  "crea un documento sobre la segunda guerra mundial",
+                  "hazme un word sobre los volcanes", "necesito un documento de word acerca de la celula"):
+        m = r.match(frase)
+        assert m and m.group(3), frase
+    m = r.match("crea el documento en word")
+    assert m and not m.group(3)
+
+
+def test_whisper_descarta_eco_de_la_pista():
+    from jarvis.oido import _es_eco_de_pista
+    assert _es_eco_de_pista("Jarvis, Word, WhatsApp, YouTube, Spotify.")
+    assert not _es_eco_de_pista("abre la carpeta de documentos")

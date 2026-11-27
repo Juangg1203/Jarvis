@@ -29,7 +29,8 @@ tres frases cortas, sin markdown, listas, emojis ni enlaces. Empieza siempre con
 El texto viene de un reconocedor de voz y puede tener errores: entiende la intención más probable.
 Usa las herramientas solo cuando haga falta (recordar_dato si te cuenta algo personal que valga la pena \
 guardar). Para charlar, responde directo. \
-Nunca envíes mensajes ni correos: solo los dejas listos."""
+Nunca envíes mensajes ni correos: solo los dejas listos. Si te piden un documento, usa redactar_documento; \
+nunca digas que creaste o abriste algo si no usaste una herramienta."""
 
 
 _LIGERO = {}

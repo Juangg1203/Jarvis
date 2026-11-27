@@ -9,11 +9,17 @@ import threading
 
 from . import ajustes, config
 
-# Palabras que Whisper debe esperar: así escribe bien los nombres propios.
-PISTA = ("Jarvis, abre la carpeta de Documentos. Pon música en YouTube o Spotify. Recuérdame mañana a las 8. "
-         "Léeme mis mensajes de WhatsApp. Crea un documento en Word.")
+# Palabras que Whisper debe esperar (solo nombres sueltos: con frases completas, en el silencio las repetía).
+PISTA = "Jarvis, Word, WhatsApp, YouTube, Spotify, OneDrive."
 # Frases que Whisper a veces "oye" en el silencio
 FANTASMAS = re.compile(r"(?i)subt[ií]tul|amara\.org|gracias por ver|suscr[ií]b|^\W*$")
+
+
+def _es_eco_de_pista(texto: str) -> bool:
+    """True si Whisper solo repitió la lista de palabras de ayuda (pasa cuando no hablaste)."""
+    palabras = re.findall(r"\w+", texto.lower())
+    pista = set(re.findall(r"\w+", PISTA.lower()))
+    return len(palabras) >= 3 and sum(w in pista for w in palabras) / len(palabras) > 0.6
 
 
 class Transcriptor:
@@ -53,10 +59,11 @@ class Transcriptor:
         try:
             with self._lock:
                 segmentos, _ = self._modelo.transcribe(
-                    audio, language="es", beam_size=1, initial_prompt=PISTA, condition_on_previous_text=False,
-                    without_timestamps=True, vad_filter=False)
+                    audio, language="es", beam_size=5, initial_prompt=PISTA, condition_on_previous_text=False,
+                    without_timestamps=True, vad_filter=True, temperature=0.0,
+                    no_speech_threshold=0.5, log_prob_threshold=-1.0)
                 texto = " ".join(s.text.strip() for s in segmentos).strip()
         except Exception as e:
             print(f"[oido] Whisper falló: {e}")
             return None
-        return None if FANTASMAS.search(texto) else texto
+        return None if FANTASMAS.search(texto) or _es_eco_de_pista(texto) else texto

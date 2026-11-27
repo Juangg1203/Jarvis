@@ -55,6 +55,7 @@ class Jarvis:
         self._salida = None         # lo que se le responde al celular
         self._estado_ui = {"estado": "esperando", "expresion": "normal"}
         self._aprendiendo_voz, self._huellas_voz = 0, []
+        self._tema_documento = False  # pregunté «¿sobre qué tema?» y espero la respuesta
         self._dictado = None        # {"tipo": "documento"|"correo", "titulo": str, "partes": [...]}
         self._deletreo = ""
         self.cerebro.manejadores_extra += [self._ordenes_seguridad, self._ordenes_dictado]
@@ -507,10 +508,11 @@ class Jarvis:
     # ---------- dictado de documentos y correos ----------
     # ---------- documentos largos escritos por la IA, en segundo plano ----------
     _RE_DOCUMENTO = re.compile(
-        r"^(?:(?:si|bueno|ok|dale|ahora)\s+)?(?:crea|creame|haz|hazme|escribe|escribeme|redacta|redactame|genera|"
-        r"generame|elabora|prepara|preparame)\s+(?:un |una |el |la |mi )?(?:nuevo |nueva )?(documento|resumen|ensayo|"
-        r"informe|tarea|trabajo|texto|articulo|reporte|exposicion|presentacion escrita)(?: nuevo| nueva)?\s+"
-        r"(sobre|acerca de|del|de|con|para)\s+(.+)$")
+        r"^(?:(?:si|bueno|ok|dale|ahora|oye)\s+)?(?:crea|creame|haz|hazme|escribe|escribeme|redacta|redactame|genera|"
+        r"generame|elabora|prepara|preparame|necesito|quiero)\s+(?:un |una |el |la |mi )?(?:nuevo |nueva )?"
+        r"(documento|archivo|word|resumen|ensayo|informe|tarea|trabajo|texto|articulo|reporte|exposicion|"
+        r"presentacion escrita)(?:\s+(?:nuevo|nueva|de word|en word|word))?"
+        r"(?:\s+(sobre|acerca de|del|de|con|para|que hable de|que trate de|que trate sobre)\s+(.+))?$")
 
     def _escribir_documento(self, pedido, titulo=""):
         """Arranca la escritura de un documento con la IA y responde enseguida; avisa cuando está listo."""
@@ -554,12 +556,23 @@ class Jarvis:
                          + "te aviso cuando esté y mientras tanto puedes pedirme otras cosas.", "guino")
 
     def _ordenes_dictado(self, original, t, solo_ordenes):
+        if self._tema_documento:
+            self._tema_documento = False
+            if not re.search(r"^(?:no|nada|cancela|olvidalo|dejalo)\b", t):
+                tema = re.sub(r"(?i)^(?:sobre|acerca de|de|del)\s+", "", original.strip())
+                return self._escribir_documento(tema)
         m = self._RE_DOCUMENTO.match(t)
+        if m and not m.group(3):
+            if m.group(1) in ("archivo",) and not re.search(r"\b(word|documento)\b", t):
+                m = None  # «crea un archivo» a secas puede ser otra cosa: que lo vea la IA
+            else:
+                self._tema_documento = True
+                return Respuesta("Claro. ¿Sobre qué tema quieres el documento?", "pensando")
         if m:
             # el tema tal como lo dijiste (con tildes), si se puede encontrar en el texto original
             o = re.search(rf"(?i)\b{m.group(1)[:5]}\w*\b.*?\b{m.group(2)}\s+(.+)$", original)
             tema = o.group(1) if o and len(o.group(1)) <= len(m.group(3)) + 4 else m.group(3)
-            pedido = tema if m.group(1) in ("documento", "texto", "trabajo") else f"{m.group(1)} {m.group(2)} {tema}"
+            pedido = tema if m.group(1) in ("documento", "texto", "trabajo", "archivo", "word") else f"{m.group(1)} {m.group(2)} {tema}"
             return self._escribir_documento(pedido)
         if re.search(r"^(?:vamos a |quiero )?deletre(?:ar|a)\b|^modo deletre", t):
             self._deletreo = ""
