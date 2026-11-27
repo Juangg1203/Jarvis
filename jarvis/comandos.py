@@ -18,6 +18,7 @@ class Respuesta:
     expresion: str = "normal"  # una de las 9 expresiones del avatar
     resultados: list = field(default_factory=list)
     dormir: bool = False
+    entendida: bool = True  # False si ninguna orden local coincide (entonces conversa Claude)
 
 
 _SI = {"si", "claro", "confirmo", "dale", "hazlo", "adelante", "correcto", "si hazlo", "si borralo", "si eliminalo"}
@@ -38,7 +39,8 @@ class Cerebro:
         self.pendiente_borrar: str | None = None
 
     # ---------- punto de entrada ----------
-    def procesar(self, texto: str) -> Respuesta:
+    def procesar(self, texto: str, solo_ordenes: bool = False) -> Respuesta:
+        """solo_ordenes=True deja los saludos y la charla para Claude."""
         t = normalizar(texto)
         if t.split(" ")[0] in config.VARIANTES_ACTIVACION:  # "Jarvis, abre..." escrito a mano
             t = t.split(" ", 1)[1] if " " in t else ""
@@ -49,6 +51,9 @@ class Cerebro:
         if self.pendiente_borrar:
             return self._confirmar_borrado(t)
 
+        if solo_ordenes and (t in {"hola", "buenas", "buenos dias", "buenas tardes", "buenas noches", "gracias",
+                                   "muchas gracias", "ayuda", "que puedes hacer", "que sabes hacer"}):
+            return Respuesta("", "normal", entendida=False)
         if t in {"hola", "hola jarvis", "buenas", "buenos dias", "buenas tardes", "buenas noches"}:
             return Respuesta(f"Hola, {config.NOMBRE_USUARIO}. ¿En qué te ayudo?", "riendo")
         if "que hora" in t:
@@ -80,7 +85,7 @@ class Cerebro:
         if m := _RE_BORRAR.match(t):
             return self._preparar_borrado(m.group(1))
 
-        return Respuesta("No entendí esa orden. Di «ayuda» para ver lo que sé hacer.", "pensando")
+        return Respuesta("No entendí esa orden. Di «ayuda» para ver lo que sé hacer.", "pensando", entendida=False)
 
     # ---------- acciones ----------
     def _buscar(self, consulta: str) -> Respuesta:

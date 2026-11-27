@@ -1,47 +1,120 @@
-// Interfaz de Jarvis: cambia la expresión del mono según lo que está haciendo.
+// Interfaz de Jarvis: escena 3D, expresiones con transición suave, onda de voz real y chat en vivo.
 (function () {
   const $ = (id) => document.getElementById(id);
-  const avatar = $("avatar"), onda = $("onda"), ondaTexto = $("ondaTexto");
-  const chat = $("chat"), lista = $("resultados"), punto = $("punto"), estadoTexto = $("estadoTexto");
+  const raiz = document.documentElement;
+  const chat = $("chat"), lista = $("resultados"), punto = $("punto"), estadoTexto = $("estadoTexto"), pista = $("pista");
+  const api = () => window.pywebview && window.pywebview.api;
 
-  // Estado -> expresión por defecto, texto de la barra y del encabezado.
   const ESTADOS = {
-    esperando:  { cara: "normal",      barra: "En espera",     cabecera: "Di «Jarvis»", clase: "" },
-    escuchando: { cara: "sorprendido", barra: "Escuchando…",   cabecera: "Escuchando",  clase: "escucha" },
-    pensando:   { cara: "pensando",    barra: "Pensando…",     cabecera: "Procesando",  clase: "escucha" },
-    hablando:   { cara: "riendo",      barra: "Hablando…",     cabecera: "Respondiendo", clase: "activa" },
-    dormido:    { cara: "dormido",     barra: "Durmiendo",     cabecera: "Dormido",     clase: "" },
-    sin_voz:    { cara: "triste",      barra: "Voz no disponible", cabecera: "Solo texto", clase: "" },
+    esperando:  { cara: "normal",      pista: "Di «Jarvis» o toca el micrófono", cabecera: "En línea" },
+    escuchando: { cara: "sorprendido", pista: "Te escucho…",                      cabecera: "Escuchando" },
+    pensando:   { cara: "pensando",    pista: "Pensando…",                        cabecera: "Procesando" },
+    hablando:   { cara: "riendo",      pista: "Toca el micrófono para interrumpir", cabecera: "Hablando" },
+    dormido:    { cara: "dormido",     pista: "Durmiendo. Di «Jarvis» para despertarme", cabecera: "Dormido" },
+    sin_voz:    { cara: "triste",      pista: "Micrófono no disponible: escríbeme", cabecera: "Solo texto" },
   };
+  let estado = "esperando";
 
-  // Barras de la onda de voz, como en el diseño.
-  for (const lado of [$("ondaIzq"), $("ondaDer")]) {
-    for (let i = 0; i < 14; i++) {
-      const b = document.createElement("i");
-      b.style.setProperty("--h", 6 + Math.round(Math.random() * 20) + "px");
-      b.style.animationDelay = (Math.random() * 0.8).toFixed(2) + "s";
-      lado.appendChild(b);
+  // ---------- partículas 3D de fondo ----------
+  const fondo = $("fondo"), fctx = fondo.getContext("2d");
+  let W = 0, H = 0, particulas = [];
+  function redimensionar() {
+    const dpr = window.devicePixelRatio || 1;
+    W = innerWidth; H = innerHeight;
+    fondo.width = W * dpr; fondo.height = H * dpr;
+    fctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    particulas = Array.from({ length: Math.round(W * H / 4500) }, () => ({
+      x: Math.random() * W, y: Math.random() * H, z: Math.random() * 0.9 + 0.1, v: Math.random() * 0.25 + 0.05,
+    }));
+  }
+  addEventListener("resize", redimensionar);
+  redimensionar();
+
+  // ---------- inclinación 3D con el ratón ----------
+  let objetivoX = 0, objetivoY = 0, actualX = 0, actualY = 0;
+  addEventListener("mousemove", (e) => {
+    objetivoY = (e.clientX / W - 0.5) * 18;
+    objetivoX = -(e.clientY / H - 0.5) * 12;
+  });
+  addEventListener("mouseleave", () => { objetivoX = objetivoY = 0; });
+
+  // ---------- onda de voz ----------
+  const onda = $("onda"), octx = onda.getContext("2d");
+  let nivelObjetivo = 0, nivel = 0, t = 0;
+
+  function dibujar() {
+    t += 1 / 60;
+    // suavizado: la voz sube rápido y baja despacio, como un medidor real
+    nivel += (nivelObjetivo - nivel) * (nivelObjetivo > nivel ? 0.45 : 0.12);
+    const extra = estado === "escuchando" ? 0.18 + Math.sin(t * 3) * 0.06 : estado === "pensando" ? 0.1 : 0;
+    const n = Math.max(nivel, extra);
+    raiz.style.setProperty("--nivel", n.toFixed(3));
+
+    actualX += (objetivoX + Math.sin(t * 0.6) * 2 - actualX) * 0.06;
+    actualY += (objetivoY + Math.sin(t * 0.4) * 4 - actualY) * 0.06;
+    raiz.style.setProperty("--rx", actualX.toFixed(2) + "deg");
+    raiz.style.setProperty("--ry", actualY.toFixed(2) + "deg");
+
+    // partículas con profundidad: las cercanas son más grandes, rápidas y se mueven más con el ratón
+    fctx.clearRect(0, 0, W, H);
+    for (const p of particulas) {
+      p.y -= p.v * p.z * (1 + n * 3);
+      if (p.y < -4) { p.y = H + 4; p.x = Math.random() * W; }
+      const px = p.x + actualY * p.z * 3, py = p.y - actualX * p.z * 3;
+      fctx.globalAlpha = 0.15 + p.z * 0.55;
+      fctx.fillStyle = p.z > 0.7 ? "#9fdcff" : "#1fa3ff";
+      fctx.beginPath(); fctx.arc(px, py, p.z * 1.6, 0, 7); fctx.fill();
     }
-  }
+    fctx.globalAlpha = 1;
 
-  let caraActual = "normal";
+    // barras simétricas de la onda
+    const dpr = window.devicePixelRatio || 1;
+    const ow = onda.clientWidth, oh = onda.clientHeight;
+    if (onda.width !== ow * dpr) { onda.width = ow * dpr; onda.height = oh * dpr; }
+    octx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    octx.clearRect(0, 0, ow, oh);
+    const barras = 48, ancho = ow / barras, mitad = barras / 2;
+    for (let i = 0; i < barras; i++) {
+      const d = Math.abs(i - mitad + 0.5) / mitad;             // 0 en el centro, 1 en los bordes
+      const ruido = Math.sin(t * 9 + i * 0.9) * 0.5 + Math.sin(t * 5.3 + i * 1.7) * 0.5;
+      const h = 2 + (oh - 6) * n * (1 - d * 0.75) * (0.55 + 0.45 * Math.abs(ruido));
+      const x = i * ancho + ancho * 0.3, y = (oh - h) / 2;
+      const g = octx.createLinearGradient(0, y, 0, y + h);
+      g.addColorStop(0, "rgba(159,220,255,.95)"); g.addColorStop(1, "rgba(31,163,255,.55)");
+      octx.fillStyle = g;
+      octx.shadowColor = "#1fa3ff"; octx.shadowBlur = 8;
+      octx.fillRect(x, y, ancho * 0.4, h);
+    }
+    requestAnimationFrame(dibujar);
+  }
+  requestAnimationFrame(dibujar);
+
+  // ---------- expresiones con fundido cruzado ----------
+  const caras = [$("caraA"), $("caraB")];
+  let visible = 0, caraActual = "normal";
+  // precarga para que el cambio sea instantáneo
+  ["normal", "riendo", "guino", "sorprendido", "pensando", "preocupado", "enojado", "dormido", "triste"]
+    .forEach((n) => { const i = new Image(); i.src = "assets/expresiones/" + n + ".png"; });
   function ponerCara(nombre) {
-    if (nombre === caraActual) return;
+    if (!nombre || nombre === caraActual) return;
     caraActual = nombre;
-    avatar.classList.add("cambiando");
-    setTimeout(() => {
-      avatar.src = "assets/expresiones/" + nombre + ".png";
-      avatar.classList.remove("cambiando");
-    }, 150);
+    const siguiente = 1 - visible;
+    caras[siguiente].src = "assets/expresiones/" + nombre + ".png";
+    caras[siguiente].classList.add("visible");
+    caras[visible].classList.remove("visible");
+    visible = siguiente;
   }
 
+  // ---------- chat ----------
+  let burbujaViva = null;
   function mensaje(texto, quien, error) {
     const d = document.createElement("div");
     d.className = "msg " + quien + (error ? " error" : "");
     d.textContent = texto;
     chat.appendChild(d);
-    while (chat.children.length > 40) chat.firstChild.remove();
+    while (chat.children.length > 60) chat.firstChild.remove();
     chat.scrollTop = chat.scrollHeight;
+    return d;
   }
 
   function mostrarResultados(res) {
@@ -49,58 +122,111 @@
     res.forEach((r, i) => {
       const li = document.createElement("li");
       li.title = r.ruta;
+      li.style.animationDelay = i * 0.03 + "s";
       li.innerHTML = "<b></b><span></span><small></small>";
       li.children[0].textContent = i + 1;
       li.children[1].textContent = r.nombre;
       li.children[2].textContent = r.ruta;
-      li.onclick = () => window.pywebview.api.abrir_resultado(i);
+      li.onclick = () => api() && api().abrir_resultado(i);
       lista.appendChild(li);
     });
   }
 
   let expresionRespuesta = null;
   window.jarvis = {
+    nivel(n) { nivelObjetivo = n; },
     actualizar(d) {
-      const e = ESTADOS[d.estado] || ESTADOS.esperando;
-      onda.className = "onda " + e.clase;
-      ondaTexto.textContent = d.parcial ? "«" + d.parcial + "»" : e.barra;
-      estadoTexto.textContent = e.cabecera;
-      punto.className = "estado-punto " + (d.estado === "sin_voz" ? "error" : d.estado === "dormido" ? "" : "vivo");
-      $("btnMic").classList.toggle("activo", d.estado === "escuchando");
-
-      if (d.orden) mensaje(d.orden, "yo");
+      if (d.estado) {
+        estado = d.estado;
+        document.body.dataset.estado = estado;
+        const e = ESTADOS[estado] || ESTADOS.esperando;
+        estadoTexto.textContent = e.cabecera;
+        pista.textContent = e.pista;
+        punto.className = "estado-punto " + (estado === "sin_voz" ? "error" : estado === "dormido" ? "" : "vivo");
+        if (estado === "hablando") ponerCara(d.expresion || expresionRespuesta || "riendo");
+        else ponerCara(e.cara);
+        if (estado !== "hablando") nivelObjetivo = 0;
+        if (estado === "pensando") expresionRespuesta = null;
+      }
+      if (d.expresion) { expresionRespuesta = d.expresion; if (estado === "hablando") ponerCara(d.expresion); }
+      if (d.parcial) pista.textContent = "«" + d.parcial + "»";
+      if (d.orden) { mensaje(d.orden, "yo"); burbujaViva = null; lista.innerHTML = ""; }
+      if (d.respuesta_parcial !== undefined) {
+        if (!burbujaViva) { burbujaViva = mensaje("", "jarvis"); burbujaViva.classList.add("escribiendo"); }
+        burbujaViva.textContent = d.respuesta_parcial;
+        chat.scrollTop = chat.scrollHeight;
+      }
+      if (d.respuesta_fin && burbujaViva) { burbujaViva.classList.remove("escribiendo"); burbujaViva = null; }
       if (d.respuesta) mensaje(d.respuesta, "jarvis", d.expresion === "triste" || d.expresion === "enojado");
       if (d.mensaje) mensaje(d.mensaje, "jarvis", true);
       if (d.resultados) mostrarResultados(d.resultados);
-
-      if (d.estado === "hablando" && d.expresion) expresionRespuesta = d.expresion;
-      let cara = e.cara;
-      if (d.estado === "hablando") cara = expresionRespuesta || "riendo";
-      ponerCara(cara);
     },
   };
 
+  // ---------- controles ----------
   $("formulario").addEventListener("submit", (ev) => {
     ev.preventDefault();
     const t = $("texto").value.trim();
-    if (!t || !window.pywebview) return;
+    if (!t || !api()) return;
     $("texto").value = "";
-    window.pywebview.api.enviar_texto(t);
+    api().enviar_texto(t);
   });
-  $("btnMic").onclick = () => window.pywebview && window.pywebview.api.escuchar();
-  $("btnOcultar").onclick = () => window.pywebview && window.pywebview.api.ocultar();
+  $("btnMic").onclick = () => {
+    if (!api()) return;
+    if (estado === "hablando") api().callar();
+    api().escuchar();
+  };
+  $("btnOcultar").onclick = () => api() && api().ocultar();
+  addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && api()) { api().callar(); $("panelAjustes").hidden = true; }
+  });
 
-  // Si no hay voz aún, la ventana arranca en espera.
+  // ---------- ajustes ----------
+  const panel = $("panelAjustes");
+  async function abrirAjustes() {
+    if (!api()) return;
+    const a = await api().leer_ajustes();
+    $("clave").value = "";
+    $("claveEstado").textContent = a.tiene_clave
+      ? "Clave guardada (termina en " + a.clave_final + "). Escribe otra solo si quieres cambiarla."
+      : "Sin clave: Jarvis solo hace las órdenes del computador.";
+    $("motor").value = a.voz_motor;
+    $("conversacion").checked = !!a.modo_conversacion;
+    panel.hidden = false;
+  }
+  $("btnAjustes").onclick = abrirAjustes;
+  panel.addEventListener("click", (e) => { if (e.target === panel) panel.hidden = true; });
+  $("btnGuardar").onclick = async () => {
+    await api().guardar_ajustes({
+      anthropic_api_key: $("clave").value.trim(),
+      voz_motor: $("motor").value,
+      modo_conversacion: $("conversacion").checked,
+    });
+    panel.hidden = true;
+    mensaje("Ajustes guardados.", "jarvis");
+  };
+  $("btnNueva").onclick = () => { api() && api().nueva_conversacion(); chat.innerHTML = ""; lista.innerHTML = ""; panel.hidden = true; };
+
   window.addEventListener("pywebviewready", () => window.jarvis.actualizar({ estado: "esperando" }));
+
   // Modo demostración al abrir index.html en un navegador normal.
   setTimeout(() => {
-    if (!window.pywebview) {
-      window.pywebview = { api: { enviar_texto: (t) => {
-        jarvis.actualizar({ estado: "pensando", orden: t });
-        setTimeout(() => jarvis.actualizar({ estado: "hablando", expresion: "guino", respuesta: "(Demo) Recibí: " + t }), 600);
-        setTimeout(() => jarvis.actualizar({ estado: "esperando" }), 2400);
-      }, escuchar: () => jarvis.actualizar({ estado: "escuchando" }), ocultar() {}, abrir_resultado() {} } };
-      jarvis.actualizar({ estado: "esperando" });
-    }
-  }, 1500);
+    if (window.pywebview) return;
+    const hablar = (texto, cara) => {
+      jarvis.actualizar({ estado: "hablando", expresion: cara });
+      let i = 0; const palabras = texto.split(" ");
+      const iv = setInterval(() => {
+        i++; jarvis.actualizar({ respuesta_parcial: palabras.slice(0, i).join(" ") });
+        jarvis.nivel(0.3 + Math.random() * 0.6);
+        if (i >= palabras.length) { clearInterval(iv); jarvis.nivel(0); jarvis.actualizar({ respuesta_fin: true, estado: "esperando" }); }
+      }, 140);
+    };
+    window.pywebview = { api: {
+      enviar_texto: (t) => { jarvis.actualizar({ estado: "pensando", orden: t }); setTimeout(() => hablar("(Demo) Hola, soy Jarvis. Recibí: " + t, "guino"), 700); },
+      escuchar: () => jarvis.actualizar({ estado: "escuchando" }), callar() {}, ocultar() {}, abrir_resultado() {},
+      leer_ajustes: async () => ({ tiene_clave: false, voz_motor: "piper", modo_conversacion: true }),
+      guardar_ajustes: async () => ({}), nueva_conversacion() {},
+    } };
+    jarvis.actualizar({ estado: "esperando" });
+  }, 1200);
 })();

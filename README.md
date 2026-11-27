@@ -1,8 +1,11 @@
 # Jarvis 🐒
 
-Asistente personal **100 % local y privado** para tu portátil con Windows. Te escucha por voz,
-habla en español y tiene el avatar del mono holográfico de tu diseño, que cambia de expresión
-según lo que está haciendo.
+Asistente personal para tu portátil con Windows. Te escucha por voz, te responde con una voz
+masculina natural y tiene el avatar del mono holográfico de tu diseño en una escena 3D que se
+mueve con su voz y cambia de expresión según lo que está haciendo.
+
+Las órdenes del computador funcionan **sin internet**. Si añades una clave de Claude, además
+puede **conversar contigo** de cualquier tema y entender órdenes dichas con tus propias palabras.
 
 ![Captura](docs/captura.png)
 
@@ -22,7 +25,31 @@ según lo que está haciendo.
 | «Duerme» | Se pone en modo dormido hasta que vuelvas a decir «Jarvis» |
 | «Ayuda» | Te dice lo que sabe hacer |
 
-También puedes **escribir** las órdenes en la caja de abajo o pulsar el botón del micrófono.
+También puedes **escribir** en la caja de abajo o tocar el **micrófono del centro**
+(si Jarvis está hablando, tocarlo lo interrumpe).
+
+Después de responder, Jarvis **sigue escuchando unos segundos** para que la charla fluya sin
+repetir «Jarvis» cada vez (se puede apagar en Ajustes ⚙).
+
+## Conversar con Claude (opcional)
+
+Con Claude, Jarvis deja de ser solo un ejecutor de órdenes: charla contigo, responde preguntas,
+recuerda lo que hablaron en la conversación y entiende frases como «búscame las fotos que bajé
+de la galería» aunque el micrófono las entienda a medias. También puede usar las órdenes del
+computador por ti (buscar, abrir, revisar la seguridad...). Para borrar, **siempre** tienes que
+decir «sí» tú mismo.
+
+Cómo activarlo:
+
+1. Entra en <https://console.anthropic.com>, crea una cuenta y carga saldo (Billing). Es de pago
+   por uso: cada respuesta corta cuesta alrededor de uno o dos centavos de dólar con el modelo que usa
+   Jarvis (`claude-opus-5-5`, configurable en `jarvis/config.py`).
+2. En **API Keys** crea una clave (empieza por `sk-ant-`).
+3. En Jarvis toca ⚙ **Ajustes**, pégala en «Clave de Claude» y pulsa **Guardar**.
+
+La clave se guarda solo en tu computador (`%LOCALAPPDATA%\Jarvis\ajustes.json`).
+Lo que hablas con Claude viaja por internet a Anthropic; las órdenes locales no.
+Si no hay internet o se acaba el saldo, Jarvis te lo dice y sigue haciendo las órdenes locales.
 
 ### Expresiones del avatar
 
@@ -42,8 +69,9 @@ con el mismo nombre.
 
 ## Privacidad y seguridad
 
-- **Nada sale de tu computador.** El reconocimiento de voz (Vosk) y la voz (la de Windows)
-  funcionan sin internet. Solo se usa internet una vez, al instalar, para descargar el modelo de voz.
+- **Sin clave de Claude, nada sale de tu computador.** El reconocimiento de voz (Vosk) y la voz
+  (Piper) funcionan sin internet. Solo se usa internet al instalar, para descargar los modelos.
+- Con clave de Claude, solo lo que no es una orden local se envía a Claude para conversar.
 - **Nunca borra para siempre**: todo va a la Papelera de reciclaje, y siempre pregunta antes.
 - Si la respuesta no es un «sí» claro, **no borra nada**.
 - Se niega a borrar dentro de Windows, Archivos de programa, AppData ni la carpeta de Jarvis.
@@ -56,7 +84,10 @@ con el mismo nombre.
 2. Descarga este proyecto (botón verde **Code → Download ZIP** en GitHub) y descomprímelo,
    por ejemplo en `Documentos\Jarvis`.
 3. Haz doble clic en **`instalar.bat`**. Tarda unos minutos: instala las librerías y descarga
-   el modelo de voz en español (unos 40 MB).
+   el reconocimiento de voz en español (unos 40 MB) y la voz de Jarvis (unos 110 MB).
+
+¿Ya tenías la versión anterior? Reemplaza los archivos y vuelve a ejecutar `instalar.bat`:
+solo descarga lo nuevo.
 
 ## Uso
 
@@ -72,8 +103,9 @@ con el mismo nombre.
 - Habla claro y a distancia normal del micrófono.
 - El modelo pequeño a veces entiende «Jarvis» como «yarvis» o «jarbis»; ya están contemplados en
   `jarvis/config.py` (`VARIANTES_ACTIVACION`). Si te entiende otra cosa, añádela ahí.
-- Para que la voz suene en español, Windows necesita una voz en español
-  (Configuración → Hora e idioma → Voz → Agregar voces → Español).
+- La voz de Jarvis es **Piper** (`es_MX-claude-high`), una voz neuronal masculina que suena humana
+  y funciona sin internet. En Ajustes puedes cambiar a «Más natural, con internet», que usa la voz
+  de Microsoft Gonzalo (Colombia) y necesita conexión. Si ninguna funciona, usa la voz de Windows.
 
 ## Personalizar
 
@@ -86,8 +118,10 @@ en `ALIAS_APPS` dentro de `jarvis/archivos.py`.
 ```
 jarvis/
   main.py        ventana, bandeja del sistema y conexión de todo
-  voz.py         escucha (Vosk, offline) y habla (voz de Windows)
-  comandos.py    entiende la orden y la ejecuta
+  voz.py         escucha (Vosk, offline) y habla (Piper / Edge / Windows) con nivel de audio
+  comandos.py    órdenes locales: entiende la orden y la ejecuta
+  ia.py          conversación con Claude en streaming, con las órdenes como herramientas
+  ajustes.py     clave y preferencias guardadas en tu computador
   archivos.py    buscar / abrir / mandar a la papelera, apps del menú Inicio
   seguridad.py   rutas protegidas, registro, Windows Defender, bloquear equipo
   ui/            interfaz con tu diseño (HTML + CSS + JS)
@@ -98,5 +132,5 @@ tests/           pruebas automáticas (python -m pytest)
 
 - Lenguaje de señas con la cámara (MediaPipe, también offline).
 - Más órdenes: cerrar programas, mover y copiar archivos, controlar volumen, recordatorios.
-- Un «cerebro» con IA local (por ejemplo Ollama) para entender frases más libres.
+- Un oído más preciso (Whisper local) para que entienda mejor frases largas.
 - Reconocimiento de tu voz para que solo te obedezca a ti.

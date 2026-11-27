@@ -91,3 +91,8 @@ def test_palabra_activacion():
     assert o._quitar_activacion("jarvis abre la calculadora") == "abre la calculadora"
     assert o._quitar_activacion("oye jarvis") == ""
     assert o._quitar_activacion("abre la calculadora") is None
+
+
+def test_saludo_va_a_claude_si_hay_clave():
+    assert not comandos.Cerebro().procesar("hola", solo_ordenes=True).entendida
+    assert comandos.Cerebro().procesar("hola").entendida

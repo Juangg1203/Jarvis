@@ -12,6 +12,15 @@ NOMBRE_USUARIO = "Juan"
 PALABRA_ACTIVACION = "jarvis"
 VARIANTES_ACTIVACION = {"jarvis", "yarvis", "jarbis", "yarbis", "harvis", "charvis", "jarvi", "yervis", "garbis"}
 
+# Voz de Jarvis (Piper, sin internet). Voz masculina en español latino.
+VOZ_PIPER = "es_MX-claude-high"
+CARPETA_VOCES = RAIZ / "modelos" / "voces"
+
+# Claude (conversación). Necesita internet y una clave de API de console.anthropic.com.
+MODELO_CLAUDE = "claude-opus-5-5"
+ESFUERZO_CLAUDE = "low"      # low = responde más rápido; sube a "medium" si quieres respuestas más pensadas
+MAX_MENSAJES_HISTORIAL = 40  # al pasar de aquí, Jarvis empieza una conversación nueva
+
 # Modelo de voz offline (Vosk). Se descarga con scripts/descargar_modelo.py
 CARPETA_MODELO = RAIZ / "modelos" / "vosk-model-small-es-0.42"
 
