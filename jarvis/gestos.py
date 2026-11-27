@@ -8,6 +8,9 @@ Gestos que entiende (mantenlos un segundo frente a la cámara):
   ☝️ índice arriba   -> sube el volumen
   ✌️ dos dedos (V)   -> baja el volumen
   🤟 «te quiero»     -> muestra u oculta la ventana de Jarvis
+
+Modo deletrear (di «vamos a deletrear»): letras del alfabeto manual A B D F I L O S U V W Y,
+✋ mano abierta = espacio, y al bajar la mano 3 segundos Jarvis dice la palabra y la usa como orden.
 """
 import math
 import threading
@@ -79,6 +82,41 @@ def clasificar(p):
     return None
 
 
+LETRAS = "ABDFILOSUVWY"
+
+
+def letra(p):
+    """Letra del alfabeto manual (formas estáticas sencillas) o 'espacio' o None."""
+    if not p or len(p) < 21:
+        return None
+    e = dedos_extendidos(p)
+    t = _d(p[MUNECA], p[9]) or 1e-6
+    toca = {dedo: _d(p[4], p[punta]) < t * 0.38 for dedo, (punta, _, _) in DEDOS.items()}
+    i, m, a, n, pu = e["indice"], e["medio"], e["anular"], e["menique"], e["pulgar"]
+    if i and m and a and n:
+        return "espacio" if pu else "B"
+    if toca["indice"] and m and a and n:
+        return "F"
+    if not (i or m or a or n):
+        # O: las puntas se curvan hasta el pulgar formando un aro (en el puño quedan pegadas a los nudillos)
+        if toca["indice"] and toca["medio"] and _d(p[8], p[5]) > t * 0.4:
+            return "O"
+        if pu and _d(p[4], p[6]) < t * 0.7:
+            return "A"
+        return "S" if not pu else None
+    if i and not (m or a or n):
+        if pu:
+            return "L"
+        return "D" if toca["medio"] or toca["anular"] else None
+    if n and not (i or m or a):
+        return "Y" if pu else "I"
+    if i and m and not (a or n):
+        return "V" if _d(p[8], p[12]) > t * 0.42 else "U"
+    if i and m and a and not n:
+        return "W"
+    return None
+
+
 class Estabilizador:
     """Solo acepta un gesto si se mantiene un rato, y no lo repite enseguida."""
 
@@ -118,6 +156,7 @@ class Camara:
         self._parar = threading.Event()
         self._hilo = None
         self.ultimo_cuadro = None  # último cuadro BGR (sin espejo), para fotos y verificar caras
+        self.modo = "gestos"       # "gestos" o "letras" (deletrear)
 
     @property
     def activa(self):
@@ -202,6 +241,7 @@ class Camara:
         camara.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
         camara.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
         estable, detector, inicio = Estabilizador(), None, time.monotonic()
+        letras, ultima_mano, hubo_letra = Estabilizador(sostener=0.7, espera=0.0), time.monotonic(), False
         if "gestos" in self._usos:
             self.al_estado(True)
         try:
@@ -232,7 +272,20 @@ class Camara:
                     rgb = cv2.cvtColor(cv2.flip(cuadro, 1), cv2.COLOR_BGR2RGB)
                     imagen = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
                     r = detector.detect_for_video(imagen, int((ahora - inicio) * 1000))
-                    gesto = clasificar(r.hand_landmarks[0]) if r.hand_landmarks else None
+                    mano = r.hand_landmarks[0] if r.hand_landmarks else None
+                    if self.modo == "letras":
+                        if mano:
+                            ultima_mano = ahora
+                        elif hubo_letra and ahora - ultima_mano > 3.0:
+                            hubo_letra = False
+                            self.al_gesto("fin_deletreo")
+                        final = letras.ver(letra(mano) if mano else None)
+                        if final:
+                            hubo_letra = True
+                            self.al_gesto("letra_" + final)
+                        time.sleep(1 / 20)
+                        continue
+                    gesto = clasificar(mano) if mano else None
                     final = estable.ver(gesto)
                     if final:
                         try:

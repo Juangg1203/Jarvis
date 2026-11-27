@@ -16,6 +16,8 @@ import webview
 from jarvis import ajustes, config, recordatorios
 from jarvis.comandos import Cerebro, Respuesta
 from jarvis.gemini import ConversadorGemini, ErrorGemini
+from jarvis.ollama import ConversadorOllama
+from jarvis import redactar
 from jarvis.ia import Conversador
 from jarvis.memoria import Memoria
 from jarvis.rutinas import Rutinas
@@ -52,7 +54,9 @@ class Jarvis:
         self._salida = None         # lo que se le responde al celular
         self._estado_ui = {"estado": "esperando", "expresion": "normal"}
         self._aprendiendo_voz, self._huellas_voz = 0, []
-        self.cerebro.manejadores_extra.append(self._ordenes_seguridad)
+        self._dictado = None        # {"tipo": "documento"|"correo", "titulo": str, "partes": [...]}
+        self._deletreo = ""
+        self.cerebro.manejadores_extra += [self._ordenes_seguridad, self._ordenes_dictado]
         self.oyente = Oyente(
             al_cambiar_estado=self._estado_voz,
             al_recibir_orden=self._orden_de_voz,
@@ -178,6 +182,8 @@ class Jarvis:
                 self.hablante.callar()
             self._ui(estado="pensando", orden=("📱 " if origen == "celular" else "") + texto)
             t = normalizar(texto)
+            if self._dictado is not None:
+                return self._seguir_dictado(texto, t)
             if re.search(r"\b(?:gestos|senas|camara)\b", t) and re.match(r"^(?:activa|enciende|prende|usa|desactiva|apaga|quita|deja de usar)", t):
                 encender = bool(re.match(r"^(?:activa|enciende|prende|usa)", t))
                 self.mostrar_u_ocultar_gestos(encender)
@@ -243,9 +249,10 @@ class Jarvis:
 
     def _conversador(self):
         """El cerebro para conversar que elegiste en Ajustes: Gemini (gratis) o Claude."""
-        proveedor = "claude" if self.ajustes.get("proveedor") == "claude" else "gemini"
+        proveedor = self.ajustes.get("proveedor")
+        proveedor = proveedor if proveedor in ("claude", "ollama") else "gemini"
         if proveedor not in self._conversadores:
-            clase = Conversador if proveedor == "claude" else ConversadorGemini
+            clase = {"claude": Conversador, "ollama": ConversadorOllama}.get(proveedor, ConversadorGemini)
             self._conversadores[proveedor] = clase(self.cerebro)
         return self._conversadores[proveedor]
 
@@ -460,6 +467,76 @@ class Jarvis:
             return Respuesta(self.activar_celular(False), "normal")
         return None
 
+    # ---------- dictado de documentos y correos ----------
+    def _ordenes_dictado(self, original, t, solo_ordenes):
+        if re.search(r"^(?:vamos a |quiero )?deletre(?:ar|a)\b|^modo deletre", t):
+            self._deletreo = ""
+            self.camara.modo = "letras"
+            self.camara.iniciar("gestos")
+            return Respuesta("Modo deletrear activado. Haz las letras frente a la cámara, la mano abierta es un espacio, "
+                             "y baja la mano tres segundos cuando termines.", "guino")
+        m = re.match(r"^(?:quiero dictar|dicta(?:r)?|toma(?:r)? (?:una )?nota|empieza (?:un )?dictado|(escribe|escribeme|redacta|redactame))"
+                     r"\s*(?:un |una |el |la )?(documento|nota|carta|correo|email|mail|texto)?"
+                     r"(?:\s+(?:sobre|para|de|llamad[oa]|titulad[oa]|que diga)\s+(.+))?$", t)
+        if not m:
+            return None
+        if m.group(1) and (solo_ordenes or m.group(3)) and self.conversador.disponible():
+            return None  # «escribe una carta para mi profe…»: que la IA la redacte
+        tipo = "correo" if m.group(2) in ("correo", "email", "mail") else "documento"
+        titulo = (m.group(3) or "").strip()
+        if titulo:
+            titulo = re.split(r"(?i)\b(?:sobre|para|de|llamad[oa]|titulad[oa])\b\s+", original, maxsplit=1)[-1].strip()
+        self._dictado = {"tipo": tipo, "titulo": titulo, "partes": []}
+        return Respuesta(("Dicta tu correo." if tipo == "correo" else "Dicta tu documento.") +
+                         " Di «coma», «punto» o «punto y aparte» para puntuar, «borra lo último» si me equivoco, "
+                         "y «termina el dictado» cuando acabes.", "guino")
+
+    def _seguir_dictado(self, texto, t):
+        d = self._dictado
+        if re.search(r"\b(?:cancela|olvida|descarta)\b.*\b(?:dictado|documento|correo)\b", t):
+            self._dictado = None
+            return self._responder(Respuesta("Dictado cancelado.", "normal"))
+        if re.search(r"^borra (?:lo ultimo|la ultima frase)|^borra eso$", t):
+            if d["partes"]:
+                d["partes"].pop()
+            return self._responder(Respuesta("Borrado. Sigue.", "normal"), seguir=True)
+        if re.search(r"\b(?:termina|terminar|finaliza|acaba|fin del|guarda)\b.*\b(?:dictado|documento|correo|nota|texto)\b"
+                     r"|^(?:listo|ya termine|eso es todo|fin)$", t):
+            self._dictado = None
+            cuerpo = redactar.puntuar(" ".join(d["partes"]))
+            if not cuerpo:
+                return self._responder(Respuesta("No dictaste nada, así que no guardé nada.", "pensando"))
+            if d["tipo"] == "correo":
+                r = self.cerebro.correo("", d["titulo"], cuerpo)
+            else:
+                r = self.cerebro.documento(d["titulo"] or "Dictado", cuerpo)
+            return self._responder(r)
+        d["partes"].append(texto.strip())
+        self._ui(estado="escuchando", respuesta="✍️ " + redactar.puntuar(" ".join(d["partes"]))[-300:])
+        if self.oyente.disponible and not self._silencio:
+            self.oyente.escuchar_ahora()  # sigue escuchando sin decir nada
+        return None
+
+    def _responder(self, r, seguir=False):
+        self._ui(estado="hablando", expresion=r.expresion, respuesta=r.texto,
+                 resultados=[{"nombre": os.path.basename(p), "ruta": p} for p in r.resultados])
+        self._decir(r.texto)
+        self._despues(self.oyente.escuchar_ahora if seguir and self.oyente.disponible else self._al_terminar_de_hablar)
+
+    # ---------- deletrear con la mano ----------
+    def _letra(self, nombre):
+        if nombre.startswith("letra_"):
+            self._deletreo += " " if nombre == "letra_espacio" else nombre[6:]
+            self._ui(gesto="✍️ " + self._deletreo.strip()[-24:])
+            return
+        if nombre == "fin_deletreo":
+            palabra, self._deletreo = self._deletreo.strip(), ""
+            self.camara.modo = "gestos"
+            if not palabra:
+                return
+            self._ui(gesto="✍️ " + palabra)
+            threading.Thread(target=self.ejecutar, args=(palabra.lower(),), daemon=True).start()
+
     # ---------- bandeja del sistema (segundo plano) ----------
     def mostrar(self):
         self._oculta = False
@@ -503,6 +580,8 @@ class Jarvis:
             self._ui(mensaje=error)
 
     def _gesto(self, nombre):
+        if self.camara.modo == "letras":
+            return self._letra(nombre)
         self._ui(gesto=gestos.NOMBRES.get(nombre, nombre))
         c = self.cerebro
         hay_pendiente = bool(c.pendiente_borrar or c.pendiente_accion)
@@ -681,6 +760,24 @@ class Api:
         if a.get("celular") != antes.get("celular") or (a.get("celular") and not j.celular):
             j.activar_celular(bool(a.get("celular")))
         return self.leer_ajustes()
+
+    def estado_ollama(self):
+        from jarvis import ollama
+        import shutil
+        instalados = ollama.modelos_instalados()
+        exe = os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs", "Ollama", "ollama.exe")
+        return {"instalado": bool(instalados) or os.path.exists(exe) or bool(shutil.which("ollama")),
+                "abierto": bool(instalados), "modelo": ollama.tiene(config.MODELO_OLLAMA, instalados),
+                "vision": ollama.tiene(config.MODELO_OLLAMA_VISION, instalados), "nombre": config.MODELO_OLLAMA}
+
+    def instalar_ollama(self):
+        """Abre el instalador en una ventana aparte (descarga unos 2 GB)."""
+        import subprocess
+        bat = config.RAIZ / "instalar_ollama.bat"
+        if sys.platform == "win32" and bat.exists():
+            subprocess.Popen(["cmd", "/c", "start", "Instalar Ollama", str(bat)], cwd=str(config.RAIZ))
+            return True
+        return False
 
     def nuevo_codigo_celular(self):
         """Cambia el código: los celulares vinculados dejan de funcionar hasta escanear el QR nuevo."""

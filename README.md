@@ -50,6 +50,12 @@ sigue haciendo las órdenes del computador. Google puede usar lo que hablas en e
 mejorar sus productos, así que no le cuentes datos delicados. El modelo (`gemini-flash-latest`) se
 cambia en `jarvis/config.py`.
 
+**Ollama (gratis y sin internet):** la IA corre dentro de tu portátil y nada sale de él. Ejecuta
+`instalar_ollama.bat` una vez (descarga Ollama y el modelo `qwen2.5:3b`, unos 2 GB) y en Ajustes elige
+«Ollama». Es más lento y menos listo que Gemini, pero no tiene límites ni necesita conexión. Para que
+también pueda mirar tu pantalla sin internet, instala el modelo de visión con
+`instalar_ollama.bat --vision` (unos 3 GB más).
+
 **Claude (de pago, opcional):** en <https://console.anthropic.com> cargas saldo y creas una clave
 `sk-ant-`. En Ajustes eliges «Claude» y la pegas. Cada respuesta corta cuesta uno o dos centavos de
 dólar.
@@ -196,6 +202,23 @@ funciona también sin internet, y «olvida todo» borra la memoria (pide confirm
 Las imágenes están en `jarvis/ui/assets/expresiones/`. Si quieres cambiar alguna, reemplaza el PNG
 con el mismo nombre.
 
+## Novedades de la versión 6
+
+| Dile… | Qué hace |
+|---|---|
+| «ordena mis descargas por tipo» / «… por fecha» | Te dice cuántos archivos moverá y a qué carpetas, y espera tu «sí». Los que se están bajando no los toca. |
+| «deshaz el orden» | Devuelve todo a donde estaba. |
+| «pon Bad Bunny en YouTube» / «pon lofi en Spotify» | Busca y reproduce. «pausa», «siguiente», «anterior» controlan lo que suene. |
+| «dicta un documento» | Escribe lo que dices («coma», «punto», «punto y aparte»). «borra lo último», «termina el dictado» lo guarda en Word en Documentos\Jarvis. |
+| «escribe un correo a mi profe pidiendo permiso» | Te deja el correo listo en tu programa de correo. **Tú** lo envías. |
+| «qué hay en mi pantalla» / «qué es este error» | Toma una captura **solo en ese momento** y se la muestra a la IA. |
+| «léeme mis mensajes de WhatsApp» / «¿tengo correos nuevos?» | Lee las notificaciones de Windows. |
+| «respóndele a Mamá que ya voy» | Copia la respuesta y abre WhatsApp: tú la pegas y la envías. |
+| «vamos a deletrear» | Con la cámara, deletrea con las letras A B D F I L O S U V W Y (la mano abierta con el pulgar es un espacio). Si quitas la mano 3 segundos, termina. |
+
+Jarvis nunca envía mensajes ni correos solo: siempre te los deja listos para que tú los mandes.
+Para leer notificaciones, la primera vez Windows te pregunta si le das permiso.
+
 ## Privacidad y seguridad
 
 - **Sin clave de Claude, nada sale de tu computador.** El reconocimiento de voz (Vosk) y la voz
@@ -264,6 +287,13 @@ jarvis/
   vigilancia.py  memorias USB, disco lleno y vigilancia con foto de intrusos
   internet.py    clima, noticias y preguntas sin clave de Claude
   celular.py     servidor local de la app del celular (con código secreto)
+  gemini.py      conversación con Gemini (gratis)
+  ollama.py      conversación con Ollama (gratis y sin internet)
+  organizar.py   ordenar carpetas por tipo o fecha y deshacer
+  musica.py      YouTube, Spotify y teclas multimedia
+  redactar.py    documentos de Word y borradores de correo
+  pantalla.py    captura de pantalla para preguntarle a la IA
+  notificaciones.py  notificaciones de WhatsApp y correo
   ui/celular/    la página que abre el celular
   ui/            interfaz con tu diseño (HTML + CSS + JS)
 tests/           pruebas automáticas (python -m pytest)
@@ -271,8 +301,7 @@ tests/           pruebas automáticas (python -m pytest)
 
 ## Próximos pasos
 
-- Más señas (letras del abecedario) y gestos que tú mismo enseñes.
+- Letras con movimiento (J, Z) y gestos que tú mismo enseñes.
 - Usar la app del celular fuera de casa (con un túnel seguro).
 - Mover y copiar archivos por voz.
 - Un oído más preciso (Whisper local) para que entienda mejor frases largas.
-- Reconocimiento de tu voz para que solo te obedezca a ti.

@@ -43,7 +43,12 @@ suspender y forzar cierres quedan pendientes hasta que él diga «sí»: pídele
 
 Tienes búsqueda en internet: úsala para el clima, noticias, resultados deportivos, precios o cualquier \
 dato actual o que no sepas con seguridad. Cuéntalo en voz, en dos o tres frases, sin leer direcciones web \
-ni citar fuentes salvo que te lo pida. Para el clima, si no dice la ciudad, usa la de su memoria; si no \
+ni citar fuentes salvo que te lo pida. También puedes poner música (YouTube o Spotify) y controlarla, ordenar carpetas (pide confirmación), \
+crear documentos de Word que tú redactas, dejar correos escritos para que él los envíe, mirar su pantalla \
+cuando te lo pida, y leerle sus notificaciones de WhatsApp o correo. Nunca envías mensajes ni correos tú: \
+los dejas listos y él los envía.
+
+Para el clima, si no dice la ciudad, usa la de su memoria; si no \
 la sabes, pregúntasela una vez y guárdala con recordar_dato."""
 
 HERRAMIENTAS = [
@@ -171,6 +176,60 @@ HERRAMIENTAS += [
         "name": "cerrar_colgados",
         "description": "Busca los programas que Windows marca como 'No responde' y propone cerrarlos (pide confirmación).",
         "input_schema": {"type": "object", "properties": {}},
+    },    {
+        "name": "reproducir_musica",
+        "description": "Pone música o un video: en YouTube reproduce el primer resultado; en Spotify abre la búsqueda.",
+        "input_schema": {"type": "object", "properties": {
+            "consulta": {"type": "string", "description": "Canción, artista o tipo de música (ej. 'lofi para estudiar')."},
+            "donde": {"type": "string", "enum": ["youtube", "spotify"]}}, "required": ["consulta"]},
+    },
+    {
+        "name": "control_musica",
+        "description": "Controla lo que está sonando (Spotify, YouTube...): pausa/reanuda, siguiente, anterior.",
+        "input_schema": {"type": "object", "properties": {
+            "accion": {"type": "string", "enum": ["pausa", "siguiente", "anterior"]}}, "required": ["accion"]},
+    },
+    {
+        "name": "ordenar_carpeta",
+        "description": "Ordena los archivos sueltos de una carpeta en subcarpetas por tipo o por mes. Queda pendiente "
+                       "hasta que el usuario diga sí; se puede deshacer.",
+        "input_schema": {"type": "object", "properties": {
+            "carpeta": {"type": "string", "enum": ["descargas", "escritorio", "documentos", "imagenes", "videos", "musica"]},
+            "modo": {"type": "string", "enum": ["tipo", "fecha"]}}, "required": ["carpeta"]},
+    },
+    {
+        "name": "redactar_documento",
+        "description": "Crea un documento de Word con el texto que tú redactes (carta, resumen, tarea...) y lo abre.",
+        "input_schema": {"type": "object", "properties": {
+            "titulo": {"type": "string"}, "texto": {"type": "string", "description": "Texto completo, con párrafos."}},
+            "required": ["titulo", "texto"]},
+    },
+    {
+        "name": "redactar_correo",
+        "description": "Deja un correo escrito en el programa de correo del usuario para que él lo revise y lo envíe. "
+                       "Nunca se envía solo.",
+        "input_schema": {"type": "object", "properties": {
+            "para": {"type": "string", "description": "Dirección de correo si la dijo; si no, vacío."},
+            "asunto": {"type": "string"}, "cuerpo": {"type": "string"}}, "required": ["asunto", "cuerpo"]},
+    },
+    {
+        "name": "ver_pantalla",
+        "description": "Toma una captura de la pantalla del usuario y la analiza (errores, qué hay, qué hacer). "
+                       "Úsala solo cuando pida que mires su pantalla.",
+        "input_schema": {"type": "object", "properties": {"pregunta": {"type": "string"}}, "required": ["pregunta"]},
+    },
+    {
+        "name": "leer_notificaciones",
+        "description": "Lee las notificaciones recientes de Windows: mensajes (WhatsApp, Telegram...), correo o todas.",
+        "input_schema": {"type": "object", "properties": {
+            "filtro": {"type": "string", "enum": ["mensajes", "correo", "todas"]}}},
+    },
+    {
+        "name": "preparar_respuesta",
+        "description": "Para responder un mensaje de WhatsApp: copia el texto y abre WhatsApp; el usuario lo pega y "
+                       "lo envía él. Confirma antes el texto con el usuario.",
+        "input_schema": {"type": "object", "properties": {
+            "texto": {"type": "string"}, "para": {"type": "string"}}, "required": ["texto"]},
     },
 ]
 for _h in HERRAMIENTAS:
@@ -330,6 +389,24 @@ class Conversador:
         if nombre == "buscar_en_conversaciones":
             hallados = c.memoria.buscar_conversaciones(str(entrada.get("consulta", "")))
             return Respuesta("\n".join(hallados) if hallados else "No encontré nada sobre eso en conversaciones anteriores.")
+        if nombre == "reproducir_musica":
+            return c.reproducir(str(entrada.get("consulta", "")), str(entrada.get("donde") or "youtube"))
+        if nombre == "control_musica":
+            return c.tecla_musica(str(entrada.get("accion", "")))
+        if nombre == "ordenar_carpeta":
+            r = c.preparar_orden(str(entrada.get("carpeta", "descargas")), str(entrada.get("modo") or "tipo"))
+            return Respuesta(r.texto + (" (Pendiente: el usuario debe decir sí.)" if c.pendiente_accion else ""))
+        if nombre == "redactar_documento":
+            return c.documento(str(entrada.get("titulo", "")), str(entrada.get("texto", "")))
+        if nombre == "redactar_correo":
+            return c.correo(str(entrada.get("para", "")), str(entrada.get("asunto", "")), str(entrada.get("cuerpo", "")))
+        if nombre == "ver_pantalla":
+            return c.mirar_pantalla(str(entrada.get("pregunta", "")))
+        if nombre == "leer_notificaciones":
+            filtro = entrada.get("filtro")
+            return c.leer_notificaciones(None if filtro in (None, "todas") else str(filtro))
+        if nombre == "preparar_respuesta":
+            return c.responder_mensaje(str(entrada.get("texto", "")), str(entrada.get("para", "")))
         return Respuesta(f"Herramienta desconocida: {nombre}", "triste")
 
     @staticmethod

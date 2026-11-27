@@ -313,10 +313,21 @@
   $("celular").onchange = async () => pintarSeguridad(await api().guardar_ajustes({ celular: $("celular").checked }));
   $("btnCodigo").onclick = async () => pintarSeguridad(await api().nuevo_codigo_celular());
   $("tema").onchange = () => ponerTema($("tema").value);
-  function mostrarProveedor() {
-    const claude = $("proveedor").value === "claude";
-    $("campoClaude").hidden = !claude; $("campoGemini").hidden = claude;
+  async function mostrarProveedor() {
+    const p = $("proveedor").value;
+    $("campoClaude").hidden = p !== "claude"; $("campoGemini").hidden = p !== "gemini"; $("campoOllama").hidden = p !== "ollama";
+    if (p !== "ollama" || !api() || !api().estado_ollama) return;
+    $("ollamaEstado").textContent = "Revisando Ollama…";
+    const o = await api().estado_ollama();
+    $("btnOllama").hidden = o.modelo;
+    $("ollamaEstado").textContent = o.modelo
+      ? "✅ Ollama está listo con " + o.nombre + (o.vision ? " y el modelo de visión." : ". Todo se queda en tu portátil.")
+      : o.instalado && !o.abierto ? "Ollama está instalado pero cerrado. Ábrelo desde el menú Inicio, o toca el botón para terminar la instalación."
+      : "Ollama no está instalado. Toca el botón: se abre una ventana que lo instala y descarga el cerebro (unos minutos).";
   }
+  $("btnOllama").onclick = async () => {
+    if (await api().instalar_ollama()) $("ollamaEstado").textContent = "Se abrió la ventana del instalador. Cuando termine, vuelve a abrir Ajustes.";
+  };
   $("proveedor").onchange = mostrarProveedor;
   $("btnAjustes").onclick = abrirAjustes;
   panel.addEventListener("click", (e) => { if (e.target === panel) panel.hidden = true; });
@@ -400,6 +411,7 @@
         celular_direccion: "http://192.168.1.20:8765/",
         celular_qr: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 21 21"><path d="M1 1h7v7H1zM13 1h7v7h-7zM1 13h7v7H1zM10 3h2v2h-2zM10 9h3v2h-3zM15 11h2v3h-2zM10 14h2v5h-2zM14 16h5v2h-5z"/></svg>' }),
       vigilancia: async () => !document.body.classList.contains("vigilando"), orden() {}, nuevo_codigo_celular: async () => window.pywebview.api.leer_ajustes(),
+      estado_ollama: async () => ({ instalado: false, abierto: false, modelo: false, vision: false, nombre: "qwen2.5:3b" }), instalar_ollama: async () => true,
       guardar_ajustes: async () => ({}), nueva_conversacion() {},
       leer_panel: async () => ({ avisos: [{ id: "a", tipo: "recordatorio", mensaje: "sacar la ropa", cuando: "en 20 minutos" },
         { id: "b", tipo: "alarma", mensaje: "", cuando: "mañana a las 06:30" }], rutinas: ["estudio", "normal", "buenos dias"],

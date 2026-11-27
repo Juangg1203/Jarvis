@@ -81,9 +81,14 @@
       <label>Cerebro para conversar
         <select id="proveedor">
           <option value="gemini">Gemini de Google (gratis)</option>
+          <option value="ollama">Ollama (gratis y sin internet)</option>
           <option value="claude">Claude (de pago)</option>
         </select>
       </label>
+      <div id="campoOllama" class="campo" hidden>
+        <small id="ollamaEstado">Revisando Ollama…</small>
+        <div class="chips"><button type="button" id="btnOllama">⬇️ Instalar Ollama (unos 2 GB)</button></div>
+      </div>
       <label id="campoGemini">Clave de Gemini
         <input type="password" id="claveGemini" placeholder="AIza…" autocomplete="off">
         <small id="geminiEstado"></small>

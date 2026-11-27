@@ -76,6 +76,31 @@ def _contenido(m):
     return {"role": "user", "parts": [{"text": str(m["content"])}]}
 
 
+def peticion(metodo, cuerpo, modelo=None):
+    modelo = modelo or config.MODELO_GEMINI
+    url = URL.format(modelo=modelo, metodo=metodo) + ("?alt=sse" if metodo.startswith("stream") else "")
+    req = urllib.request.Request(url, data=json.dumps(cuerpo).encode("utf-8"), method="POST", headers={
+        "Content-Type": "application/json", "x-goog-api-key": ajustes.clave_gemini()})
+    try:
+        return urllib.request.urlopen(req, timeout=90)
+    except urllib.error.HTTPError as e:
+        detalle = e.read().decode("utf-8", "replace")
+        if e.code == 404 and modelo != config.MODELO_GEMINI_RESPALDO:
+            return peticion(metodo, cuerpo, config.MODELO_GEMINI_RESPALDO)
+        if e.code in (400, 401, 403) and ("API key" in detalle or "API_KEY" in detalle or e.code != 400):
+            raise ErrorGemini("Mi clave de Gemini no es válida. Revísala en Ajustes.") from e
+        if e.code == 429:
+            raise ErrorGemini("Ya usé todas las preguntas gratis de Gemini por ahora. "
+                              "Espera un minuto, o hasta mañana si fue el límite del día.", "preocupado") from e
+        if e.code >= 500:
+            raise ErrorGemini("Gemini está saturado en este momento. Inténtalo en un ratito.", "preocupado") from e
+        print(f"[gemini] {e.code}: {detalle[:500]}")
+        raise ErrorGemini("Gemini no entendió la petición.") from e
+    except urllib.error.URLError as e:
+        raise ErrorGemini("No tengo conexión a internet. Las órdenes del computador siguen funcionando.",
+                          "preocupado") from e
+
+
 class Frases:
     """Va juntando el texto que llega y entrega frases completas para la voz."""
 
@@ -122,30 +147,8 @@ class ConversadorGemini(Conversador):
     def disponible(self) -> bool:
         return bool(ajustes.clave_gemini())
 
-    # ---------- llamadas a la API ----------
     def _peticion(self, metodo, cuerpo, modelo=None):
-        modelo = modelo or config.MODELO_GEMINI
-        url = URL.format(modelo=modelo, metodo=metodo) + ("?alt=sse" if metodo.startswith("stream") else "")
-        req = urllib.request.Request(url, data=json.dumps(cuerpo).encode("utf-8"), method="POST", headers={
-            "Content-Type": "application/json", "x-goog-api-key": ajustes.clave_gemini()})
-        try:
-            return urllib.request.urlopen(req, timeout=90)
-        except urllib.error.HTTPError as e:
-            detalle = e.read().decode("utf-8", "replace")
-            if e.code == 404 and modelo != config.MODELO_GEMINI_RESPALDO:
-                return self._peticion(metodo, cuerpo, config.MODELO_GEMINI_RESPALDO)
-            if e.code in (400, 401, 403) and ("API key" in detalle or "API_KEY" in detalle or e.code != 400):
-                raise ErrorGemini("Mi clave de Gemini no es válida. Revísala en Ajustes.") from e
-            if e.code == 429:
-                raise ErrorGemini("Ya usé todas las preguntas gratis de Gemini por ahora. "
-                                  "Espera un minuto, o hasta mañana si fue el límite del día.", "preocupado") from e
-            if e.code >= 500:
-                raise ErrorGemini("Gemini está saturado en este momento. Inténtalo en un ratito.", "preocupado") from e
-            print(f"[gemini] {e.code}: {detalle[:500]}")
-            raise ErrorGemini("Gemini no entendió la petición.") from e
-        except urllib.error.URLError as e:
-            raise ErrorGemini("No tengo conexión a internet. Las órdenes del computador siguen funcionando.",
-                              "preocupado") from e
+        return peticion(metodo, cuerpo, modelo)
 
     def _cuerpo(self, sistema):
         return {

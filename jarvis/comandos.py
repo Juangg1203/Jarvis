@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 
 import os as _os
 
-from . import archivos, config, control, documentos, internet, recordatorios, seguridad
+from . import archivos, config, control, documentos, internet, musica, organizar, recordatorios, redactar, seguridad
 from .memoria import Memoria
 from .rutinas import Rutinas
 from .texto import extraer_numero, normalizar
@@ -76,7 +76,7 @@ class Cerebro:
         if self.pendiente_accion:
             return self._confirmar_accion(t)
 
-        for manejador in (*self.manejadores_extra, self._organizador, self._control, self._documentos, self._internet):
+        for manejador in (*self.manejadores_extra, self._organizador, self._control, self._documentos, self._v6, self._internet):
             r = manejador(texto, t, solo_ordenes)
             if r is not None:
                 return r
@@ -160,6 +160,110 @@ class Cerebro:
             return Respuesta("No encontré una respuesta corta; te abrí la búsqueda en el navegador.", "pensando")
         except Exception:
             return Respuesta("No pude conectarme a internet para buscar eso.", "preocupado")
+
+    # ---------- v6: música, ordenar carpetas, notificaciones, pantalla, documentos ----------
+    def reproducir(self, consulta, donde="youtube") -> Respuesta:
+        try:
+            return Respuesta(musica.reproducir(consulta, donde), "riendo")
+        except Exception:
+            return Respuesta("No pude abrir la música.", "triste")
+
+    def tecla_musica(self, accion) -> Respuesta:
+        textos = {"siguiente": "Siguiente canción.", "anterior": "Canción anterior.", "pausa": "Listo.",
+                  "detener": "Música detenida."}
+        if accion not in textos:
+            return Respuesta("No sé hacer eso con la música.", "pensando")
+        ok = musica.tecla(accion)
+        return Respuesta(textos[accion] if ok else "Eso solo funciona en Windows.", "guino" if ok else "triste")
+
+    def preparar_orden(self, nombre, modo="tipo") -> Respuesta:
+        origen = organizar.carpeta(normalizar(nombre or "descargas"))
+        if origen is None:
+            return Respuesta(f"No encontré la carpeta {nombre}.", "pensando")
+        plan = organizar.planear(origen, "fecha" if modo == "fecha" else "tipo")
+        if not plan:
+            return Respuesta(f"La carpeta {origen.name} ya está ordenada: no hay archivos sueltos.", "guino")
+        n = len(plan)
+        pregunta = (f"En {origen.name} hay {n} {'archivo suelto' if n == 1 else 'archivos sueltos'}. Voy a mover "
+                    f"{organizar.describir(plan)}. Si no te gusta, di «deshaz el orden». ¿Lo hago?")
+        return self.pedir_confirmacion(pregunta, lambda: f"Listo, ordené {organizar.ejecutar(plan)} archivos.", "pensando")
+
+    def leer_notificaciones(self, filtro=None) -> Respuesta:
+        from . import notificaciones
+        try:
+            lista = notificaciones.leer(filtro)
+        except Exception as e:
+            return Respuesta(str(e) if isinstance(e, RuntimeError) else "No pude leer tus notificaciones.", "triste")
+        return Respuesta(notificaciones.resumen(lista), "normal" if lista else "guino")
+
+    def responder_mensaje(self, texto, quien="") -> Respuesta:
+        from . import notificaciones
+        notificaciones.copiar(texto)
+        notificaciones.abrir_whatsapp()
+        destino = f"el chat de {quien}" if quien else "el chat"
+        return Respuesta(f"Copié tu respuesta y abrí WhatsApp. Abre {destino}, pega con Control V y dale enviar.",
+                         "guino")
+
+    def mirar_pantalla(self, pregunta="") -> Respuesta:
+        from . import pantalla
+        try:
+            return Respuesta(pantalla.preguntar(pregunta) or "No supe qué decir de tu pantalla.", "pensando")
+        except Exception as e:
+            mensaje = getattr(e, "mensaje", "") or "No pude mirar tu pantalla ahora."
+            return Respuesta(mensaje, "triste")
+
+    def documento(self, titulo, texto) -> Respuesta:
+        try:
+            ruta = redactar.crear_documento(titulo or "Documento", texto)
+        except Exception as e:
+            return Respuesta(f"No pude crear el documento: {e}", "triste")
+        seguridad.registrar("documento", ruta)
+        return Respuesta("Listo, guardé el documento en Documentos, carpeta Jarvis, y te lo abrí.", "riendo",
+                         resultados=[ruta])
+
+    def correo(self, para="", asunto="", cuerpo="") -> Respuesta:
+        redactar.borrador_correo(para, asunto, cuerpo)
+        return Respuesta("Te dejé el correo listo en tu programa de correo. Revísalo y dale enviar tú.", "guino")
+
+    def _v6(self, original, t, solo_ordenes):
+        # música
+        if re.search(r"\b(?:siguiente|proxima)\s+(?:cancion|tema|canción)\b|^(?:siguiente|salta(?:la)?|cambia(?:la)? de cancion)$", t):
+            return self.tecla_musica("siguiente")
+        if re.search(r"\b(?:cancion|tema) anterior\b|\banterior cancion\b|^anterior$", t):
+            return self.tecla_musica("anterior")
+        if re.search(r"^(?:pausa|pausa la musica|para la musica|pausa la cancion|deten la musica|reanuda(?: la musica)?|continua la musica|sigue la musica|quita la pausa)$", t):
+            return self.tecla_musica("pausa")
+        m = re.match(r"^(?:pon|ponme|reproduce|reproduceme|toca|coloca)\s+(.+?)(?:\s+en\s+(youtube|spotify))?$", t)
+        if m and not re.match(r"^(?:el|la|los|las|un|una)\s+(?:alarma|temporizador|recordatorio|volumen|brillo|modo|rutina|vigilancia|wifi)\b"
+                              r"|^(?:alarma|temporizador|recordatorio|volumen|brillo|modo|rutina|vigilancia|wifi)\b", m.group(1)):
+            consulta = re.sub(r"^(?:algo de |un poco de )", "", m.group(1))
+            if consulta in {"musica", "algo", "una cancion", "musica para estudiar", "musica para concentrarme"}:
+                consulta = "música para estudiar lofi" if "estudiar" in consulta or "concentr" in consulta or consulta in {"musica", "algo", "una cancion"} else consulta
+            return self.reproducir(consulta, m.group(2) or "youtube")
+        # ordenar carpetas
+        m = re.search(r"^(?:ordena|organiza|acomoda|arregla)(?:me)?\s+(?:mi |mis |la |las |el |los )?(?:carpeta (?:de )?)?"
+                      r"(descargas|escritorio|documentos|imagenes|fotos|videos|musica)(?:\s+por\s+(tipo|fecha|mes))?", t)
+        if m:
+            return self.preparar_orden(m.group(1), "fecha" if m.group(2) in ("fecha", "mes") else "tipo")
+        if re.search(r"\b(?:deshaz|deshacer|devuelve)\s+(?:el |lo )?(?:orden|ordenado)\b|^desordena", t):
+            n = organizar.deshacer()
+            return Respuesta(f"Listo, devolví {n} archivos a su sitio." if n else "No hay ningún orden para deshacer.",
+                             "normal")
+        # notificaciones, WhatsApp y correo
+        if re.search(r"\b(?:lee|leeme|tengo|hay|revisa|que dicen)\b.*\b(?:notificaciones|mensajes?|whatsapp|correos?|emails?)\b", t):
+            filtro = "mensajes" if re.search(r"\b(?:mensajes?|whatsapp|telegram)\b", t) else \
+                "correo" if re.search(r"\b(?:correos?|emails?|gmail|outlook)\b", t) else None
+            return self.leer_notificaciones(filtro)
+        m = re.match(r"^(?:responde|respondele|contesta|contestale)(?:le)?(?:\s+a\s+(\w+(?:\s\w+)?))?\s+(?:que|diciendo que|diciendo)\s+(.+)", normalizar(original))
+        if m:
+            texto = re.split(r"(?i)\b(?:que|diciendo que|diciendo)\b\s+", original, maxsplit=1)[-1].strip()
+            return self.responder_mensaje(texto, m.group(1) or "")
+        # pantalla
+        if re.search(r"\b(?:mira|lee|leeme|revisa|analiza|explicame)\s+(?:mi |la |lo de la |lo que hay en (?:la|mi) )?pantalla\b"
+                     r"|\bque (?:hay|ves|sale|dice) en (?:mi |la )?pantalla\b|\bque (?:es|significa) (?:este|ese) error\b"
+                     r"|\bayudame con (?:este|ese) error\b|\bque dice (?:aqui|esto)\b", t):
+            return self.mirar_pantalla(original)
+        return None
 
     # ---------- recordatorios, rutinas y memoria ----------
     def _organizador(self, original, t, solo_ordenes):
@@ -350,6 +454,8 @@ class Cerebro:
 
     # ---------- documentos ----------
     def _documentos(self, original, t, solo_ordenes):
+        if re.search(r"notificacion|mensaje|whatsapp|correo|pantalla", t):
+            return None  # eso lo atiende _v6
         m = re.match(r"^(?:resume|resumeme|resumir|resumen de|haz un resumen de|hazme un resumen de|"
                      r"de que (?:se )?trata|que dice|lee|leeme)\s*(?:el |la |este |ese |esta |esa |mi )?"
                      r"(?:documento|archivo|pdf|word|texto|trabajo)?\s*(?:llamado |que se llama |de |del )?(.*)$", t)

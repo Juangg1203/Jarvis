@@ -243,3 +243,4 @@ body.vigilando .marco::before { content: "🛡️ Vigilando: si alguien usa el P
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition: none !important; }
 }
 .ajustes label[hidden] { display: none; }
+.campo { display: flex; flex-direction: column; gap: 6px; } .campo[hidden] { display: none; }
