@@ -1,0 +1,9 @@
+# Opcional: leer las notificaciones de Windows (WhatsApp, correo). Si falla, Jarvis funciona igual.
+winrt-runtime; sys_platform == "win32"
+winrt-Windows.Foundation; sys_platform == "win32"
+winrt-Windows.Foundation.Collections; sys_platform == "win32"
+winrt-Windows.ApplicationModel; sys_platform == "win32"
+winrt-Windows.UI.Notifications; sys_platform == "win32"
+winrt-Windows.UI.Notifications.Management; sys_platform == "win32"
+# Opcional: oído preciso sin internet (Whisper). Entiende mucho mejor lo que dices.
+faster-whisper>=1.0

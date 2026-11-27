@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0a2a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icono.png">
+  <link rel="apple-touch-icon" href="/icono.png">
+  <title>Jarvis</title>
+  <style>
+    :root { --c1: #22d3ee; --c2: #8b5cf6; --c3: #ec4899; --c4: #f59e0b; --texto: #e6f1ff; --tenue: #8fa3c7; --fondo: #060318; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; color: var(--texto); font-family: system-ui, "Segoe UI", Roboto, sans-serif; }
+    body { background: radial-gradient(ellipse 120% 60% at 50% 0%, #1b1453 0%, #0a0b2e 45%, var(--fondo) 85%);
+      display: flex; flex-direction: column; padding: env(safe-area-inset-top) 16px env(safe-area-inset-bottom); }
+    header { display: flex; align-items: center; gap: 12px; padding: 14px 0 10px; }
+    .avatar { position: relative; width: 64px; height: 64px; flex: none; border-radius: 50%; padding: 2px;
+      background: conic-gradient(from 0deg, var(--c1), var(--c2), var(--c3), var(--c4), var(--c1)); animation: girar 8s linear infinite; }
+    .avatar img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; background: #050818; display: block;
+      animation: contragirar 8s linear infinite; }
+    body.pensando .avatar { animation-duration: 1.5s; } body.pensando .avatar img { animation-duration: 1.5s; }
+    h1 { margin: 0; font-size: 18px; letter-spacing: 3px; background: linear-gradient(90deg, var(--c1), var(--c2), var(--c3));
+      -webkit-background-clip: text; background-clip: text; color: transparent; }
+    #estado { font-size: 12.5px; color: var(--tenue); }
+    #estado::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 6px;
+      background: #34d399; box-shadow: 0 0 8px #34d399; vertical-align: 1px; }
+    body.sin-conexion #estado::before { background: #f43f5e; box-shadow: 0 0 8px #f43f5e; }
+    .voz { margin-left: auto; display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--tenue); }
+    .alerta { margin: 4px 0 8px; padding: 10px 12px; border-radius: 12px; font-size: 14px;
+      background: linear-gradient(135deg, rgba(244,63,94,.25), rgba(245,158,11,.2)); border: 1px solid rgba(244,63,94,.6); }
+    .alerta[hidden] { display: none; }
+    #chat { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 6px 0 10px; }
+    .msg { max-width: 86%; padding: 10px 13px; border-radius: 16px; font-size: 15px; line-height: 1.4; overflow-wrap: anywhere;
+      animation: entrar .25s ease both; }
+    .yo { align-self: flex-end; background: linear-gradient(135deg, #6d28d9, #db2777); border-bottom-right-radius: 4px; }
+    .jarvis { align-self: flex-start; background: rgba(15, 23, 62, .8); border: 1px solid rgba(34,211,238,.45);
+      border-bottom-left-radius: 4px; box-shadow: 0 0 16px rgba(34,211,238,.12); }
+    .error { border-color: #f43f5e; color: #ffd5dc; }
+    .escribiendo::after { content: "● ● ●"; letter-spacing: 2px; color: var(--c1); animation: latido 1s infinite; }
+    .vacio { margin: auto; text-align: center; color: var(--tenue); font-size: 14px; max-width: 280px; line-height: 1.5; }
+    .sugerencias { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 8px; scrollbar-width: none; }
+    .sugerencias button { flex: none; background: rgba(139,92,246,.15); color: var(--texto); border: 1px solid rgba(139,92,246,.5);
+      border-radius: 16px; padding: 7px 12px; font-size: 13px; }
+    form { display: flex; gap: 8px; padding: 6px 0 14px; }
+    input { flex: 1; min-width: 0; font-size: 16px; color: var(--texto); background: rgba(10,14,40,.9); border: 1px solid rgba(34,211,238,.45);
+      border-radius: 24px; padding: 12px 16px; outline: none; }
+    input:focus { border-color: var(--c1); box-shadow: 0 0 12px rgba(34,211,238,.35); }
+    .redondo { width: 48px; height: 48px; flex: none; border-radius: 50%; border: none; color: #fff; display: grid; place-items: center;
+      background: linear-gradient(135deg, var(--c1), var(--c2)); box-shadow: 0 0 14px rgba(139,92,246,.5); }
+    #mic { background: linear-gradient(135deg, var(--c3), var(--c4)); }
+    #mic[hidden] { display: none; }
+    #mic.oyendo { animation: latido .9s infinite; }
+    .sin-codigo { margin: auto; text-align: center; max-width: 300px; line-height: 1.5; color: var(--tenue); }
+    @keyframes entrar { from { opacity: 0; transform: translateY(6px); } }
+    @keyframes latido { 50% { opacity: .45; } }
+    @keyframes girar { to { transform: rotate(360deg); } }
+    @keyframes contragirar { to { transform: rotate(-360deg); } }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="avatar"><img id="cara" src="/caras/normal.png" alt="Jarvis"></div>
+    <div><h1>J.A.R.V.I.S</h1><div id="estado">Conectando…</div></div>
+    <label class="voz"><input type="checkbox" id="leer" checked style="width:18px;height:18px"> Voz</label>
+  </header>
+  <div class="alerta" id="alerta" hidden></div>
+  <main id="chat"></main>
+  <div class="sugerencias" id="sugerencias">
+    <button>¿Qué clima hace hoy?</button><button>Bloquea el computador</button><button>Vigila el computador</button>
+    <button>¿Cuánta batería tiene el PC?</button><button>Dame las noticias</button><button>Pon el modo estudio</button>
+  </div>
+  <form id="form">
+    <input id="texto" autocomplete="off" enterkeyhint="send" placeholder="Escríbele o dicta con el teclado…">
+    <button type="button" class="redondo" id="mic" hidden aria-label="Hablar">
+      <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2Z"/></svg>
+    </button>
+    <button class="redondo" aria-label="Enviar">
+      <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M3 20.5 21 12 3 3.5v6.6l12 1.9-12 1.9z"/></svg>
+    </button>
+  </form>
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const guardar = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
+  const leerLS = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+
+  // El código llega en el enlace del QR (#c=...). Se guarda en este celular y se borra de la barra de direcciones.
+  const m = location.hash.match(/c=([\w-]+)/);
+  if (m) { guardar("jarvisCodigo", m[1]); history.replaceState(null, "", "/"); }
+  const codigo = leerLS("jarvisCodigo") || (m && m[1]);
+  const chat = $("chat");
+
+  if (!codigo) {
+    chat.innerHTML = '<p class="sin-codigo">Para conectar este celular, abre <b>Ajustes → Celular</b> en Jarvis y escanea el código QR con la cámara.</p>';
+    $("form").hidden = true; $("sugerencias").hidden = true; $("estado").textContent = "Sin vincular";
+    return;
+  }
+
+  function mensaje(texto, quien, extra) {
+    const v = chat.querySelector(".vacio"); if (v) v.remove();
+    const d = document.createElement("div");
+    d.className = "msg " + quien + (extra ? " " + extra : "");
+    d.textContent = texto;
+    chat.appendChild(d);
+    chat.scrollTop = chat.scrollHeight;
+    return d;
+  }
+  chat.innerHTML = '<p class="vacio">Hola 👋 Escríbeme o toca el micrófono del teclado para dictar. Lo que me pidas lo hago en tu computador.</p>';
+
+  function hablar(texto) {
+    if (!$("leer").checked || !("speechSynthesis" in window)) return;
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(texto);
+    u.lang = "es-ES";
+    const voces = speechSynthesis.getVoices().filter((v) => v.lang.startsWith("es"));
+    const hombre = voces.find((v) => /jorge|diego|pablo|juan|male|hombre|enrique|carlos/i.test(v.name));
+    if (hombre || voces[0]) u.voice = hombre || voces[0];
+    speechSynthesis.speak(u);
+  }
+  $("leer").checked = leerLS("jarvisLeer") !== "no";
+  $("leer").onchange = () => guardar("jarvisLeer", $("leer").checked ? "si" : "no");
+
+  async function api(ruta, opciones) {
+    const r = await fetch(ruta, Object.assign({ headers: { "X-Jarvis-Codigo": codigo, "Content-Type": "application/json" } }, opciones));
+    const datos = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(datos.error || "Error " + r.status);
+    return datos;
+  }
+
+  let ocupado = false;
+  async function enviar(texto) {
+    if (!texto || ocupado) return;
+    ocupado = true;
+    mensaje(texto, "yo");
+    const espera = mensaje("", "jarvis", "escribiendo");
+    document.body.classList.add("pensando");
+    try {
+      const r = await api("/api/hablar", { method: "POST", body: JSON.stringify({ texto }) });
+      espera.classList.remove("escribiendo");
+      espera.textContent = r.respuesta || "Listo.";
+      if (r.expresion) $("cara").src = "/caras/" + r.expresion + ".png";
+      hablar(espera.textContent);
+    } catch (e) {
+      espera.classList.remove("escribiendo"); espera.classList.add("error");
+      espera.textContent = e.message === "Failed to fetch" ? "No llego al computador. ¿Está encendido y en el mismo wifi?" : e.message;
+    }
+    document.body.classList.remove("pensando");
+    ocupado = false;
+  }
+  $("form").onsubmit = (ev) => { ev.preventDefault(); const t = $("texto").value.trim(); $("texto").value = ""; enviar(t); };
+  $("sugerencias").onclick = (ev) => { if (ev.target.tagName === "BUTTON") enviar(ev.target.textContent); };
+
+  // Micrófono propio solo si el navegador lo permite (en http normal, usa el micrófono del teclado).
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (SR && window.isSecureContext) {
+    const rec = new SR(); rec.lang = "es-ES"; rec.interimResults = false;
+    $("mic").hidden = false;
+    $("mic").onclick = () => { try { rec.start(); $("mic").classList.add("oyendo"); } catch (e) {} };
+    rec.onresult = (e) => enviar(e.results[0][0].transcript);
+    rec.onend = () => $("mic").classList.remove("oyendo");
+  }
+
+  // Estado y alertas de seguridad (memorias USB, intrusos, disco lleno).
+  let ultimaAlerta = Number(leerLS("jarvisAlerta") || 0), primera = true;
+  async function revisar() {
+    try {
+      const e = await api("/api/estado?desde=" + ultimaAlerta);
+      document.body.classList.remove("sin-conexion");
+      $("estado").textContent = e.vigilando ? "En línea · vigilando 🛡️" : "En línea";
+      if (e.expresion && !ocupado) $("cara").src = "/caras/" + e.expresion + ".png";
+      for (const a of e.alertas || []) {
+        ultimaAlerta = Math.max(ultimaAlerta, a.id);
+        if (primera) continue; // al abrir no repite alertas viejas
+        $("alerta").textContent = "⚠️ " + a.texto; $("alerta").hidden = false;
+        if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+      }
+      guardar("jarvisAlerta", String(ultimaAlerta));
+      primera = false;
+    } catch (err) {
+      document.body.classList.add("sin-conexion");
+      $("estado").textContent = /Código/.test(err.message) ? "Código vencido: escanea el QR otra vez" : "Sin conexión con el PC";
+    }
+  }
+  $("alerta").onclick = () => { $("alerta").hidden = true; };
+  revisar(); setInterval(revisar, 5000);
+})();
+</script>
+</body>
+</html>

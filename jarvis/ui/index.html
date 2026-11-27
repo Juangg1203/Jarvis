@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Jarvis</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body data-estado="esperando" data-tema="holograma">
+  <canvas id="fondo"></canvas>
+  <div class="aurora" aria-hidden="true"><i></i><i></i><i></i></div>
+
+  <main class="marco">
+    <header class="barra">
+      <div class="marca">
+        <span class="logo" aria-hidden="true"></span>
+        <div class="marca-texto">
+          <span class="titulo">JARVIS</span>
+          <span class="estado-chip"><span class="estado-punto" id="punto"></span><span class="estado-texto" id="estadoTexto">Iniciando…</span></span>
+        </div>
+      </div>
+      <nav class="acciones">
+      <button class="icono-btn" id="btnVigilar" title="Vigilar el computador mientras no estás" aria-label="Vigilar">
+        <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M12 2 4 5v6c0 5 3.4 9.7 8 11 4.6-1.3 8-6 8-11V5Zm0 5a3 3 0 1 1 0 6 3 3 0 0 1 0-6Zm0 13c-2-.7-3.7-2.1-4.8-4 .9-1.4 2.8-2.3 4.8-2.3s3.9.9 4.8 2.3c-1.1 1.9-2.8 3.3-4.8 4Z"/></svg>
+      </button>
+      <button class="icono-btn" id="btnGestos" title="Gestos con la cámara (lenguaje de señas)" aria-label="Gestos">
+        <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M21 7a1.5 1.5 0 0 0-3 0v4.5h-.5V4a1.5 1.5 0 0 0-3 0v7.5H14V2.5a1.5 1.5 0 0 0-3 0v9h-.5V5a1.5 1.5 0 0 0-3 0v10.3l-2.3-2.2a1.6 1.6 0 0 0-2.3 2.2l4.6 5.1A5 5 0 0 0 11.2 22H16a5 5 0 0 0 5-5Z"/></svg>
+      </button>
+      <button class="icono-btn agenda-btn" id="btnAgenda" title="Recordatorios, rutinas y memoria" aria-label="Agenda">
+        <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22Zm7-6V11a7 7 0 0 0-5.5-6.84V3.5a1.5 1.5 0 0 0-3 0v.66A7 7 0 0 0 5 11v5l-2 2v1h18v-1Z"/></svg>
+        <span class="insignia" id="insignia" hidden>0</span>
+      </button>
+      <button class="icono-btn" id="btnAjustes" title="Ajustes" aria-label="Ajustes">
+        <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.3 7.3 0 0 0-1.7-1L15 3.3h-4l-.4 2.6a7.3 7.3 0 0 0-1.7 1l-2.5-1-2 3.5L6.5 11a7.6 7.6 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1a7.3 7.3 0 0 0 1.7 1l.4 2.6h4l.4-2.6a7.3 7.3 0 0 0 1.7-1l2.5 1 2-3.5ZM13 15.5A3.5 3.5 0 1 1 13 8.5a3.5 3.5 0 0 1 0 7Z" transform="translate(-1 0)"/></svg>
+      </button>
+      <button class="icono-btn" id="btnOcultar" title="Seguir en segundo plano" aria-label="Ocultar">
+        <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M5 11h14v2H5z"/></svg>
+      </button>
+      </nav>
+    </header>
+
+    <div class="cuerpo">
+      <!-- Escenario: el orbe holográfico, el panel del equipo y el botón para hablar -->
+      <section class="escena" id="escena">
+        <canvas id="orbe" aria-label="Jarvis"></canvas>
+
+        <aside class="sistema" id="sistema" aria-label="Tu equipo">
+          <div class="sis-cabeza">
+            <div><b id="sisHora">--:--</b><small id="sisFecha"></small></div>
+            <span class="sis-equipo" id="sisEquipo">Tu equipo</span>
+          </div>
+          <div class="sis-fila" id="sisBateria"><span>🔋 Batería</span><em>--</em><i><u></u></i></div>
+          <div class="sis-fila" id="sisCpu"><span>⚙️ Procesador</span><em>--</em><i><u></u></i></div>
+          <div class="sis-fila" id="sisRam"><span>🧠 Memoria</span><em>--</em><i><u></u></i></div>
+          <div class="sis-fila" id="sisDisco"><span>💾 Disco</span><em>--</em><i><u></u></i></div>
+          <ul class="sis-datos" id="sisDatos"></ul>
+        </aside>
+
+        <div class="gesto" id="gesto" hidden></div>
+
+        <div class="consola">
+          <canvas class="onda" id="onda" height="60"></canvas>
+          <button class="mic" id="btnMic" title="Mantén presionado para hablar (o la barra espaciadora)" aria-label="Mantén presionado para hablar">
+            <span class="orbita o1"></span><span class="orbita o2"></span>
+            <svg viewBox="0 0 24 24" width="30" height="30"><path fill="currentColor" d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2Z"/></svg>
+          </button>
+          <div class="pista" id="pista">Mantén presionado para hablar · o di «Jarvis»</div>
+        </div>
+      </section>
+
+      <!-- Conversación -->
+      <section class="lateral">
+        <div class="lateral-cabeza"><span>Conversación</span><small id="cerebro"></small></div>
+        <section class="chat" id="chat"></section>
+        <div class="sugerencias" aria-label="Sugerencias">
+          <button type="button" data-orden="¿Qué clima hace hoy?">🌤️ Clima</button>
+          <button type="button" data-orden="Dame las noticias">📰 Noticias</button>
+          <button type="button" data-orden="¿Tengo mensajes nuevos?">💬 Mensajes</button>
+          <button type="button" data-orden="Ordena mis descargas por tipo">🗂️ Ordenar descargas</button>
+          <button type="button" data-orden="Modo estudio">📚 Modo estudio</button>
+          <button type="button" data-orden="Ayuda">✨ ¿Qué sabes hacer?</button>
+        </div>
+        <ul class="resultados" id="resultados"></ul>
+        <form class="entrada" id="formulario">
+          <svg class="entrada-icono" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M12 2 9.5 8.5 3 11l6.5 2.5L12 20l2.5-6.5L21 11l-6.5-2.5Z"/></svg>
+          <input id="texto" autocomplete="off" placeholder="Pídele algo a Jarvis…">
+          <button type="submit" class="enviar" aria-label="Enviar">
+            <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M3 20.5 21 12 3 3.5v6.6l12 1.9-12 1.9z"/></svg>
+          </button>
+        </form>
+      </section>
+    </div>
+  </main>
+
+  <!-- Panel de ajustes -->
+  <aside class="ajustes" id="panelAjustes" hidden>
+    <div class="ajustes-caja agenda">
+      <h2>Ajustes</h2>
+      <label>Cerebro para conversar
+        <select id="proveedor">
+          <option value="local">Solo local: todo en tu portátil, sin internet</option>
+          <option value="auto">Automático: Gemini con internet, Ollama sin él</option>
+          <option value="gemini">Gemini de Google (gratis)</option>
+          <option value="ollama">Ollama (gratis y sin internet)</option>
+          <option value="claude">Claude (de pago)</option>
+        </select>
+      </label>
+      <div id="campoOllama" class="campo" hidden>
+        <label>Cerebro de Ollama
+          <select id="ollamaModelo">
+            <option value="qwen2.5:1.5b">Rápido (responde más o menos el doble de rápido)</option>
+            <option value="qwen2.5:3b">Más listo (más lento en portátiles sin tarjeta gráfica)</option>
+          </select>
+        </label>
+        <small id="ollamaEstado">Revisando Ollama…</small>
+        <div class="chips"><button type="button" id="btnOllamaRapido" hidden>⬇️ Descargar el cerebro rápido (1 GB)</button></div>
+        <div class="chips"><button type="button" id="btnOllama">⬇️ Instalar Ollama (unos 2 GB)</button></div>
+      </div>
+      <label id="campoGemini">Clave de Gemini
+        <input type="password" id="claveGemini" placeholder="AIza…" autocomplete="off">
+        <small id="geminiEstado"></small>
+        <small>¿No tienes? Entra a <b>aistudio.google.com</b> → «Get API key» → «Crear clave de API». Es gratis.</small>
+      </label>
+      <label id="campoClaude" hidden>Clave de Claude
+        <input type="password" id="clave" placeholder="sk-ant-…" autocomplete="off">
+        <small id="claveEstado">Sin clave: Jarvis solo hace las órdenes del computador.</small>
+      </label>
+      <label>Voz
+        <select id="motor">
+          <option value="piper">Natural, sin internet (recomendada)</option>
+          <option value="edge">Más natural, con internet</option>
+          <option value="windows">Voz de Windows</option>
+        </select>
+      </label>
+      <label>Colores
+        <select id="tema">
+          <option value="holograma">Holograma (azul)</option>
+          <option value="aurora">Aurora (multicolor)</option>
+          <option value="oceano">Océano (azul original)</option>
+          <option value="esmeralda">Esmeralda</option>
+          <option value="atardecer">Atardecer</option>
+        </select>
+      </label>
+      <label class="fila"><input type="checkbox" id="conversacion"> Seguir escuchando después de responder</label>
+      <label class="fila"><input type="checkbox" id="gestosInicio"> Encender los gestos con la cámara al abrir Jarvis</label>
+      <small>Gestos: ✋ hablar · ✊ silencio · 👍 sí · 👎 no · ☝️ subir volumen · ✌️ bajar volumen · 🤟 mostrar u ocultar.
+        También puedes arrastrar un PDF o Word a la ventana para que lo resuma.</small>
+      <section>
+        <h3>🛡️ Seguridad</h3>
+        <div class="chips">
+          <button type="button" data-orden="aprende mi voz" id="btnVoz">🎙️ Aprender mi voz</button>
+          <button type="button" data-orden="aprende mi cara" id="btnCara">🙂 Aprender mi cara</button>
+        </div>
+        <small id="identidadEstado"></small>
+        <label class="fila"><input type="checkbox" id="soloDueno"> Solo obedecer a mi voz (o a mi cara frente a la cámara)</label>
+        <label class="fila"><input type="checkbox" id="avisosSeguridad"> Avisarme de memorias USB nuevas y del disco casi lleno</label>
+        <small>Con 🛡️ arriba (o diciendo «vigila el computador»), si alguien usa el PC mientras no estás le toma una foto y lo bloquea.</small>
+      </section>
+      <section>
+        <h3>📱 Celular</h3>
+        <label class="fila"><input type="checkbox" id="celular"> Hablar con Jarvis desde el celular (mismo wifi)</label>
+        <div class="qr" id="qrCaja" hidden>
+          <div id="qr"></div>
+          <div><small>Escanéalo con la cámara del celular y luego «Añadir a pantalla de inicio».</small>
+            <code id="direccion"></code>
+            <button type="button" id="btnCodigo" class="enlace">Cambiar código (desvincula los celulares)</button></div>
+        </div>
+      </section>
+      <div class="botones">
+        <button type="button" id="btnNueva">Nueva conversación</button>
+        <button type="button" id="btnGuardar" class="primario">Guardar</button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Panel de agenda: recordatorios, rutinas y memoria -->
+  <aside class="ajustes" id="panelAgenda" hidden>
+    <div class="ajustes-caja agenda">
+      <h2>Tu agenda</h2>
+      <section>
+        <h3>Recordatorios y alarmas</h3>
+        <ul class="lista" id="listaAvisos"></ul>
+        <small>Di «recuérdame en 20 minutos…» o «pon una alarma a las 7».</small>
+      </section>
+      <section>
+        <h3>Rutinas</h3>
+        <div class="chips" id="listaRutinas"></div>
+        <small>Di «modo estudio», o pídele a Jarvis que cree una rutina nueva.</small>
+      </section>
+      <section>
+        <h3>Lo que Jarvis recuerda de ti</h3>
+        <ul class="lista" id="listaDatos"></ul>
+        <small id="infoResumenes">Di «recuerda que…» para que lo guarde.</small>
+      </section>
+      <div class="botones"><button type="button" id="btnCerrarAgenda" class="primario">Cerrar</button></div>
+    </div>
+  </aside>
+
+  <script src="app.js"></script>
+</body>
+</html>
