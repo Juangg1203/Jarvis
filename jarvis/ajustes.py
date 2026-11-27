@@ -13,6 +13,7 @@ POR_DEFECTO = {
     "voz_motor": "piper",       # piper (natural, sin internet) | edge (más natural, con internet) | windows
     "voz_edge": "es-CO-GonzaloNeural",
     "modo_conversacion": True,  # tras responder, sigue escuchando sin tener que decir "Jarvis"
+    "gestos_al_iniciar": False,  # encender la cámara para los gestos al abrir Jarvis
 }
 
 

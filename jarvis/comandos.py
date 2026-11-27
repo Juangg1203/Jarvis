@@ -8,7 +8,9 @@ import os
 import re
 from dataclasses import dataclass, field
 
-from . import archivos, config, recordatorios, seguridad
+import os as _os
+
+from . import archivos, config, control, documentos, recordatorios, seguridad
 from .memoria import Memoria
 from .rutinas import Rutinas
 from .texto import extraer_numero, normalizar
@@ -51,6 +53,8 @@ class Cerebro:
     def __init__(self, agenda=None, memoria=None, rutinas=None):
         self.ultimos_resultados: list[str] = []
         self.pendiente_borrar: str | None = None
+        self.pendiente_accion = None  # (descripción, función que devuelve el texto a decir)
+        self.documento: str | None = None  # último documento leído
         self.agenda = agenda if agenda is not None else recordatorios.Agenda()
         self.memoria = memoria if memoria is not None else Memoria()
         self.rutinas = rutinas if rutinas is not None else Rutinas()
@@ -68,9 +72,13 @@ class Cerebro:
         if self.pendiente_borrar:
             return self._confirmar_borrado(t)
 
-        r = self._organizador(texto, t, solo_ordenes)
-        if r is not None:
-            return r
+        if self.pendiente_accion:
+            return self._confirmar_accion(t)
+
+        for manejador in (self._organizador, self._control, self._documentos):
+            r = manejador(texto, t, solo_ordenes)
+            if r is not None:
+                return r
 
         if solo_ordenes and (t in {"hola", "buenas", "buenos dias", "buenas tardes", "buenas noches", "gracias",
                                    "muchas gracias", "ayuda", "que puedes hacer", "que sabes hacer"}):
@@ -145,6 +153,14 @@ class Cerebro:
             return Respuesta(self.rutinas.ejecutar(nombre, self.agenda), "riendo")
 
         # Memoria
+        if re.match(r"^(?:olvida|borra|olvidate de)\s+todo\b", t):
+            return self.pedir_confirmacion("¿Borro todo lo que recuerdo de ti y de nuestras conversaciones?",
+                                           lambda: (self.memoria.olvidar_todo(), "Listo, empecé de cero.")[1])
+        if re.match(r"^(?:de que hablamos|que hablamos|que te dije)\b", t) and not solo_ordenes:
+            ultimos = self.memoria.resumenes[-2:]
+            if not ultimos:
+                return Respuesta("No tengo resúmenes de conversaciones anteriores todavía.", "pensando")
+            return Respuesta(" ".join(f"El {r['fecha'][:10]}: {r['resumen']}" for r in ultimos), "normal")
         if m := _RE_RECORDAR.match(t):
             dato = m.group(1)
             originales = {normalizar(w): w for w in re.findall(r"[\wáéíóúüñÁÉÍÓÚÜÑ]+", original)}
@@ -190,6 +206,157 @@ class Cerebro:
             return Respuesta(f"Tienes {len(items)} pendientes. Dime cuál, por ejemplo «cancela el recordatorio dos», "
                              "o «cancela todos los recordatorios».", "pensando")
         return Respuesta("Cancelado." if quitados else "No encontré ese número.", "normal" if quitados else "pensando")
+
+    # ---------- confirmaciones genéricas ----------
+    def pedir_confirmacion(self, pregunta, funcion, cara="preocupado") -> Respuesta:
+        self.pendiente_accion = (pregunta, funcion)
+        return Respuesta(pregunta + " Di sí o no.", cara)
+
+    def _confirmar_accion(self, t) -> Respuesta:
+        (_, funcion), self.pendiente_accion = self.pendiente_accion, None
+        if t in _SI or t.startswith("si "):
+            try:
+                texto = funcion()
+            except Exception as e:
+                seguridad.registrar("accion_error", str(e))
+                return Respuesta("No pude hacerlo.", "triste")
+            return Respuesta(texto, "guino")
+        if t in _NO or t.startswith("no "):
+            return Respuesta("Cancelado.", "normal")
+        return Respuesta("No entendí si querías hacerlo, así que lo cancelé.", "preocupado")
+
+    # ---------- control del PC ----------
+    def _control(self, original, t, solo_ordenes):
+        t2 = recordatorios._a_cifras(t)
+        numero = re.search(r"\b(?:a|al|en|hasta)\s+(\d{1,3})\b", t2)
+        nivel = int(numero.group(1)) if numero else None
+        sube = re.match(r"^(?:sube|subir|subele|aumenta|aumentar|mas)\b", t2)
+        baja = re.match(r"^(?:baja|bajar|bajale|disminuye|reduce|menos)\b", t2)
+        ajusta = re.match(r"^(?:pon|ponme|ponle|ajusta|cambia|deja|configura)\b", t2)
+        cuanto = re.search(r"\b(\d{1,3})\s*(?:puntos|por ciento)?$", t2)
+
+        if re.match(r"^(?:silencia|silenciar|mutea|mute|quita el sonido|sin sonido|apaga el sonido)\b", t2):
+            return Respuesta(control.volumen(silenciar=True), "normal")
+        if re.match(r"^(?:quita el silencio|desmutea|activa el sonido|pon el sonido|vuelve el sonido|prende el sonido)\b", t2):
+            return Respuesta(control.volumen(silenciar=False), "guino")
+        if re.search(r"\b(?:volumen|sonido)\b", t2) and (sube or baja or ajusta or nivel is not None):
+            if nivel is not None and (ajusta or not (sube or baja)):
+                return Respuesta(control.volumen(nivel=nivel), "guino")
+            paso = int(cuanto.group(1)) if cuanto and not nivel else 10
+            return Respuesta(control.volumen(cambio=paso if sube else -paso if baja else 0, nivel=nivel), "guino")
+        if re.search(r"\bbrillo\b", t2) and (sube or baja or ajusta or nivel is not None):
+            if nivel is not None and (ajusta or not (sube or baja)):
+                return Respuesta(control.brillo(nivel=nivel), "guino")
+            paso = int(cuanto.group(1)) if cuanto and not nivel else 20
+            return Respuesta(control.brillo(cambio=paso if sube else -paso, nivel=nivel), "guino")
+
+        if re.search(r"\b(?:wifi|wi fi|wi-fi)\b", t2):
+            if re.match(r"^(?:apaga|desactiva|desconecta|quita)", t2):
+                return Respuesta(control.wifi(False), "normal")
+            if re.match(r"^(?:prende|enciende|activa|conecta|pon)", t2):
+                return Respuesta(control.wifi(True), "guino")
+            conectado, red = control.wifi_estado()
+            return Respuesta(f"Estás conectado a {red}." if conectado else "No estás conectado a ningún wifi.", "normal")
+        if re.search(r"\b(?:bateria|pila)\b", t2) or t2 in {"cuanta carga tengo", "cuanta carga queda"}:
+            return Respuesta(control.bateria(), "normal")
+
+        equipo = r"(?:el |la |mi )?(?:computador|computadora|pc|equipo|portatil|ordenador|laptop|compu)\b"
+        if re.match(r"^(?:cancela|cancelar|anula|deten|para)\s+(?:el |la )?(?:apagado|reinicio)|^no (?:te )?apagues", t2):
+            return Respuesta(control.cancelar_apagado(), "guino")
+        if re.match(r"^(?:apaga|apagar|apagame)\s+" + equipo, t2):
+            return self.pedir_confirmacion("¿Seguro que apago el computador? Guarda tu trabajo antes.",
+                                           lambda: control.apagar(reiniciar=False))
+        if re.match(r"^(?:reinicia|reiniciar|reiniciame)\s+" + equipo, t2):
+            return self.pedir_confirmacion("¿Seguro que reinicio el computador? Guarda tu trabajo antes.",
+                                           lambda: control.apagar(reiniciar=True))
+        if re.match(r"^(?:suspende|suspender|hiberna|hibernar)\s+" + equipo, t2):
+            return self.pedir_confirmacion("¿Suspendo el computador?", control.suspender)
+
+        if re.search(r"\b(?:no responden?|congelad[oa]s?|colgad[oa]s?|trabad[oa]s?|pegad[oa]s?)\b", t2) and \
+                re.match(r"^(?:cierra|cerrar|mata|quita|arregla|que hago)", t2):
+            return self.cerrar_colgados()
+        if m := re.match(r"^(?:fuerza el cierre de|forzar el cierre de|cierra a la fuerza|mata|matar)\s+(?:el |la |a )?(?:proceso |programa |aplicacion |app )?(.+)$", t2):
+            return self.cerrar_programa(m.group(1), forzar=True)
+        if m := re.match(r"^(?:cierra|cerrar|cierrame)\s+(?:el |la |los |las )?(?:programa |aplicacion |app |ventana de )?(.+)$", t2):
+            return self.cerrar_programa(m.group(1), forzar=False)
+        return None
+
+    def cerrar_programa(self, nombre, forzar=False) -> Respuesta:
+        procesos = control.buscar_procesos(nombre)
+        if not procesos:
+            return Respuesta(f"No veo {nombre} abierto.", "pensando")
+        lista = ", ".join(p.removesuffix(".exe").removesuffix(".EXE") for p in procesos)
+        if forzar:
+            return self.pedir_confirmacion(
+                f"¿Fuerzo el cierre de {lista}? Si tenía algo sin guardar, se pierde.",
+                lambda: f"Cerré {lista}." if sum(control.cerrar(p, True) for p in procesos) else "No pude cerrarlo.")
+        cerrados = sum(1 for p in procesos if control.cerrar(p, forzar=False))
+        seguridad.registrar("cerrar", lista)
+        if cerrados:
+            return Respuesta(f"Cerrando {lista}. Si no se cierra, di «fuerza el cierre de {nombre}».", "guino")
+        return Respuesta(f"{nombre} no quiere cerrarse. Di «fuerza el cierre de {nombre}» si está congelado.", "preocupado")
+
+    def cerrar_colgados(self) -> Respuesta:
+        lista = control.colgados()
+        if not lista:
+            return Respuesta("Ningún programa aparece como «No responde» ahora mismo.", "guino")
+        nombres = ", ".join(p.rsplit(".", 1)[0] for p in lista)
+        return self.pedir_confirmacion(f"No responden: {nombres}. ¿Los cierro a la fuerza?",
+                                       lambda: f"Cerré {control.cerrar_colgados(lista)} programa(s) congelado(s).")
+
+    # ---------- documentos ----------
+    def _documentos(self, original, t, solo_ordenes):
+        m = re.match(r"^(?:resume|resumeme|resumir|resumen de|haz un resumen de|hazme un resumen de|"
+                     r"de que (?:se )?trata|que dice|lee|leeme)\s*(?:el |la |este |ese |esta |esa |mi )?"
+                     r"(?:documento|archivo|pdf|word|texto|trabajo)?\s*(?:llamado |que se llama |de |del )?(.*)$", t)
+        if not m:
+            return None
+        objetivo = m.group(1).strip()
+        # Una ruta completa (por ejemplo, un archivo arrastrado a la ventana) se toma tal cual del original.
+        ruta_directa = re.search(r"[A-Za-z]:\\[^\n]+|/[^\n]+\.\w{2,4}$", original)
+        if ruta_directa and _os.path.isfile(ruta_directa.group(0).strip()):
+            objetivo = ruta_directa.group(0).strip()
+        if solo_ordenes:
+            return Respuesta("", "pensando", entendida=False)  # Claude lo lee con la herramienta leer_documento
+        ruta, r = self.resolver_documento(objetivo)
+        if not ruta:
+            return r
+        texto, nota = documentos.extraer_texto(ruta)
+        if not texto:
+            return Respuesta(f"No pude leer {_os.path.basename(ruta)}: {nota or 'está vacío'}.", "triste")
+        resumen = documentos.resumen_local(texto)
+        temas = ", ".join(documentos.temas(texto))
+        self.memoria.anotar("Jarvis", f"Resumen de {_os.path.basename(ruta)}: {resumen}")
+        return Respuesta(f"{_os.path.basename(ruta)} habla de {temas}. Lo más importante: {resumen} "
+                         "Con la clave de Claude te haría un resumen mucho mejor y podrías preguntarme sobre él.",
+                         "riendo", [ruta])
+
+    def resolver_documento(self, objetivo):
+        """Devuelve (ruta, None) o (None, Respuesta explicando el problema)."""
+        objetivo = (objetivo or "").strip()
+        if objetivo and _os.path.isfile(objetivo):
+            ruta = objetivo
+        elif not objetivo or objetivo in {"este", "ese", "el", "lo", "documento", "archivo"}:
+            ruta = self.documento or next((r for r in self.ultimos_resultados if documentos.es_documento(r)), None)
+            if not ruta:
+                return None, Respuesta("¿Qué documento resumo? Dime su nombre o arrástralo a mi ventana.", "pensando")
+        else:
+            elegido = self._elegir(objetivo)
+            if elegido:
+                ruta = elegido[0]
+            else:
+                encontrados = [r for r in archivos.buscar_archivos(objetivo) if documentos.es_documento(r)]
+                if not encontrados:
+                    return None, Respuesta(f"No encontré ningún documento llamado «{objetivo}».", "triste")
+                if len(encontrados) > 1:
+                    self.ultimos_resultados = encontrados
+                    return None, Respuesta(f"Hay {len(encontrados)} documentos con ese nombre. Di «resume el» y el número.",
+                                           "pensando", encontrados)
+                ruta = encontrados[0]
+        if not documentos.es_documento(ruta):
+            return None, Respuesta("Ese archivo no es un documento que sepa leer (PDF, Word, PowerPoint o texto).", "pensando")
+        self.documento = ruta
+        return ruta, None
 
     # ---------- acciones ----------
     def _buscar(self, consulta: str) -> Respuesta:

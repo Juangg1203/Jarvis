@@ -34,7 +34,12 @@ También puedes poner recordatorios, alarmas y temporizadores (calcula la fecha 
 de la hora actual que va al inicio de cada mensaje), ejecutar o crear rutinas (por ejemplo «modo estudio»), \
 y recordar datos de él para siempre. Cuando te cuente algo personal que valga la pena recordar \
 (gustos, nombres de personas cercanas, metas, horarios), guárdalo con recordar_dato sin preguntar. \
-Si te pregunta por algo que hablaron antes y no está en tu memoria, búscalo en las conversaciones guardadas."""
+Si te pregunta por algo que hablaron antes y no está en tu memoria, búscalo en las conversaciones guardadas.
+
+Puedes leer documentos (PDF, Word, PowerPoint, texto) con leer_documento para resumirlos o responder \
+preguntas sobre ellos; resume en voz, corto y claro, y ofrece profundizar. También controlas el PC: \
+volumen, brillo, wifi, batería, cerrar programas, y apagar, reiniciar o suspender. Apagar, reiniciar, \
+suspender y forzar cierres quedan pendientes hasta que él diga «sí»: pídele que confirme."""
 
 HERRAMIENTAS = [
     {
@@ -115,6 +120,52 @@ HERRAMIENTAS += [
         "name": "buscar_en_conversaciones",
         "description": "Busca palabras en las conversaciones guardadas de días anteriores.",
         "input_schema": {"type": "object", "properties": {"consulta": {"type": "string"}}, "required": ["consulta"]},
+    },
+]
+HERRAMIENTAS += [
+    {
+        "name": "leer_documento",
+        "description": "Lee el texto de un documento (PDF, Word, PowerPoint, texto) para resumirlo o responder preguntas. Acepta un nombre, una ruta completa, el número de un resultado de búsqueda, o vacío para el último documento.",
+        "input_schema": {"type": "object", "properties": {"objetivo": {"type": "string"}}},
+    },
+    {
+        "name": "volumen",
+        "description": "Cambia el volumen del PC: nivel absoluto 0-100, o cambio relativo (+10/-10), o silenciar true/false.",
+        "input_schema": {"type": "object", "properties": {
+            "nivel": {"type": "integer"}, "cambio": {"type": "integer"}, "silenciar": {"type": "boolean"}}},
+    },
+    {
+        "name": "brillo",
+        "description": "Cambia el brillo de la pantalla del portátil: nivel 0-100 o cambio relativo.",
+        "input_schema": {"type": "object", "properties": {"nivel": {"type": "integer"}, "cambio": {"type": "integer"}}},
+    },
+    {
+        "name": "wifi",
+        "description": "Conecta (true) o desconecta (false) el wifi. Si lo desconectas, no podrás seguir conversando.",
+        "input_schema": {"type": "object", "properties": {"encender": {"type": "boolean"}}, "required": ["encender"]},
+    },
+    {
+        "name": "bateria",
+        "description": "Dice el porcentaje de batería y si está cargando.",
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "energia",
+        "description": "Apaga, reinicia o suspende el PC, o cancela un apagado programado. Salvo cancelar, queda pendiente de que el usuario diga 'sí'.",
+        "input_schema": {"type": "object", "properties": {
+            "accion": {"type": "string", "enum": ["apagar", "reiniciar", "suspender", "cancelar_apagado"]}},
+            "required": ["accion"]},
+    },
+    {
+        "name": "cerrar_programa",
+        "description": "Cierra un programa abierto (chrome, word, spotify...). forzar=true para uno congelado (pide confirmación).",
+        "input_schema": {"type": "object", "properties": {"nombre": {"type": "string"}, "forzar": {"type": "boolean"}},
+                         "required": ["nombre"]},
+    },
+    {
+        "name": "cerrar_colgados",
+        "description": "Busca los programas que Windows marca como 'No responde' y propone cerrarlos (pide confirmación).",
+        "input_schema": {"type": "object", "properties": {}},
     },
 ]
 for _h in HERRAMIENTAS:
@@ -234,6 +285,41 @@ class Conversador:
         if nombre == "olvidar_dato":
             n = c.memoria.olvidar(str(entrada.get("dato", "")))
             return Respuesta(f"Olvidé {n} dato(s).")
+        if nombre == "leer_documento":
+            from . import documentos
+            ruta, problema = c.resolver_documento(str(entrada.get("objetivo") or ""))
+            if not ruta:
+                return problema
+            return Respuesta(documentos.para_claude(ruta), "pensando", [ruta])
+        if nombre == "volumen":
+            from . import control
+            num = lambda k: entrada.get(k) if isinstance(entrada.get(k), int) else None  # noqa: E731
+            silenciar = entrada.get("silenciar") if isinstance(entrada.get("silenciar"), bool) else None
+            return Respuesta(control.volumen(nivel=num("nivel"), cambio=num("cambio"), silenciar=silenciar))
+        if nombre == "brillo":
+            from . import control
+            num = lambda k: entrada.get(k) if isinstance(entrada.get(k), int) else None  # noqa: E731
+            return Respuesta(control.brillo(nivel=num("nivel"), cambio=num("cambio")))
+        if nombre == "wifi":
+            from . import control
+            return Respuesta(control.wifi(bool(entrada.get("encender"))))
+        if nombre == "bateria":
+            from . import control
+            return Respuesta(control.bateria())
+        if nombre == "energia":
+            accion = entrada.get("accion")
+            frases = {"apagar": "apaga el computador", "reiniciar": "reinicia el computador",
+                      "suspender": "suspende el computador", "cancelar_apagado": "cancela el apagado"}
+            if accion not in frases:
+                return Respuesta("Acción no válida.")
+            r = c.procesar(frases[accion])
+            return Respuesta(r.texto + (" (Pendiente: el usuario debe decir sí.)" if c.pendiente_accion else ""))
+        if nombre == "cerrar_programa":
+            r = c.cerrar_programa(str(entrada.get("nombre", "")), forzar=bool(entrada.get("forzar")))
+            return Respuesta(r.texto + (" (Pendiente: el usuario debe decir sí.)" if c.pendiente_accion else ""))
+        if nombre == "cerrar_colgados":
+            r = c.cerrar_colgados()
+            return Respuesta(r.texto + (" (Pendiente: el usuario debe decir sí.)" if c.pendiente_accion else ""))
         if nombre == "buscar_en_conversaciones":
             hallados = c.memoria.buscar_conversaciones(str(entrada.get("consulta", "")))
             return Respuesta("\n".join(hallados) if hallados else "No encontré nada sobre eso en conversaciones anteriores.")

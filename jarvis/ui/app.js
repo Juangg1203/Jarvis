@@ -165,6 +165,11 @@
         ins.hidden = !d.avisos; ins.textContent = d.avisos;
         if (!$("panelAgenda").hidden) abrirAgenda();
       }
+      if (d.gestos_activos !== undefined) $("btnGestos").classList.toggle("activo", !!d.gestos_activos);
+      if (d.gesto) {
+        const g = $("gesto"); g.textContent = d.gesto; g.hidden = false;
+        clearTimeout(window._tGesto); window._tGesto = setTimeout(() => { g.hidden = true; }, 1600);
+      }
       if (d.aviso) { document.body.classList.add("alerta"); setTimeout(() => document.body.classList.remove("alerta"), 2000); }
     },
   };
@@ -183,6 +188,19 @@
     api().escuchar();
   };
   $("btnOcultar").onclick = () => api() && api().ocultar();
+  $("btnGestos").onclick = async () => {
+    if (!api() || !api().gestos) return;
+    const activos = await api().gestos();
+    $("btnGestos").classList.toggle("activo", !!activos);
+    mensaje(activos ? "Gestos activados: ✋ hablar · ✊ silencio · 👍 sí · 👎 no · ☝️/✌️ volumen · 🤟 mostrar/ocultar"
+                    : "Gestos desactivados.", "jarvis");
+  };
+  // Arrastrar un documento: Python recibe la ruta; aquí solo se muestra el aviso visual.
+  let arrastres = 0;
+  addEventListener("dragenter", (e) => { e.preventDefault(); arrastres++; document.body.classList.add("soltando"); });
+  addEventListener("dragleave", () => { if (--arrastres <= 0) { arrastres = 0; document.body.classList.remove("soltando"); } });
+  addEventListener("dragover", (e) => e.preventDefault());
+  addEventListener("drop", (e) => { e.preventDefault(); arrastres = 0; document.body.classList.remove("soltando"); });
   addEventListener("keydown", (e) => {
     if (e.key === "Escape" && api()) { api().callar(); $("panelAjustes").hidden = true; $("panelAgenda").hidden = true; }
   });
@@ -198,6 +216,7 @@
       : "Sin clave: Jarvis solo hace las órdenes del computador.";
     $("motor").value = a.voz_motor;
     $("conversacion").checked = !!a.modo_conversacion;
+    $("gestosInicio").checked = !!a.gestos_al_iniciar;
     panel.hidden = false;
   }
   $("btnAjustes").onclick = abrirAjustes;
@@ -207,6 +226,7 @@
       anthropic_api_key: $("clave").value.trim(),
       voz_motor: $("motor").value,
       modo_conversacion: $("conversacion").checked,
+      gestos_al_iniciar: $("gestosInicio").checked,
     });
     panel.hidden = true;
     mensaje("Ajustes guardados.", "jarvis");
@@ -273,7 +293,7 @@
         { id: "b", tipo: "alarma", mensaje: "", cuando: "mañana a las 06:30" }], rutinas: ["estudio", "normal", "buenos dias"],
         datos: ["Su equipo favorito es el Nacional", "Estudia ingeniería de sistemas"], resumenes: 3 }),
       cancelar_aviso: async () => window.pywebview.api.leer_panel(), olvidar_dato: async () => window.pywebview.api.leer_panel(),
-      ejecutar_rutina() {},
+      ejecutar_rutina() {}, gestos: async () => true,
     } };
     jarvis.actualizar({ estado: "esperando", avisos: 2 });
   }, 1200);

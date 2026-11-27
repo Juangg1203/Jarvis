@@ -1,0 +1,3 @@
+# Lenguaje de señas con la cámara (opcional). Si falla, Jarvis funciona igual sin gestos.
+mediapipe>=0.10.14
+opencv-python>=4.9

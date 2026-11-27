@@ -1,6 +1,7 @@
 """Arranca Jarvis: ventana con el avatar, voz, conversación con Claude e icono en la bandeja."""
 import json
 import os
+import re
 import sys
 import threading
 import time
@@ -17,6 +18,7 @@ from jarvis.comandos import Cerebro, Respuesta
 from jarvis.ia import Conversador
 from jarvis.memoria import Memoria
 from jarvis.rutinas import Rutinas
+from jarvis import control, gestos
 from jarvis.voz import Hablante, Oyente
 
 UI = Path(__file__).resolve().parent / "ui"
@@ -29,6 +31,7 @@ class Jarvis:
         self.agenda = recordatorios.Agenda(al_sonar=self._sonar)
         self.cerebro = Cerebro(agenda=self.agenda, memoria=Memoria(), rutinas=Rutinas())
         self._alarma_activa = None
+        self.camara = gestos.Camara(al_gesto=self._gesto, al_estado=self._estado_camara)
         self.conversador = Conversador(self.cerebro)
         self.hablante = Hablante(self.ajustes["voz_motor"], self.ajustes["voz_edge"], al_nivel=self._nivel)
         self.dormido = False
@@ -115,6 +118,17 @@ class Jarvis:
         with self._lock:
             self.hablante.callar()
             self._ui(estado="pensando", orden=texto)
+            from jarvis.texto import normalizar
+            t = normalizar(texto)
+            if re.search(r"\b(?:gestos|senas|camara)\b", t) and re.match(r"^(?:activa|enciende|prende|usa|desactiva|apaga|quita|deja de usar)", t):
+                encender = bool(re.match(r"^(?:activa|enciende|prende|usa)", t))
+                self.mostrar_u_ocultar_gestos(encender)
+                msg = ("Listo, te estoy mirando para los gestos: palma abierta para hablarme, puño para silencio, "
+                       "pulgar arriba o abajo para sí o no." if encender else "Apagué la cámara.")
+                self._ui(estado="hablando", expresion="guino", respuesta=msg)
+                self.hablante.decir(msg)
+                self.hablante.despues(self._al_terminar_de_hablar)
+                return
             hay_claude = self.conversador.disponible()
             r = self.cerebro.procesar(texto, solo_ordenes=hay_claude)
             if not r.entendida and hay_claude:
@@ -172,6 +186,7 @@ class Jarvis:
 
     # ---------- bandeja del sistema (segundo plano) ----------
     def mostrar(self):
+        self._oculta = False
         self.ventana.show()
         self.ventana.restore()
 
@@ -205,6 +220,63 @@ class Jarvis:
         self.ventana.hide()
         return False
 
+    # ---------- gestos (lenguaje de señas) ----------
+    def _estado_camara(self, activa, error=""):
+        self._ui(gestos_activos=activa)
+        if error:
+            self._ui(mensaje=error)
+
+    def _gesto(self, nombre):
+        self._ui(gesto=gestos.NOMBRES.get(nombre, nombre))
+        c = self.cerebro
+        hay_pendiente = bool(c.pendiente_borrar or c.pendiente_accion)
+        if nombre == "palma":
+            self._alarma_activa = None
+            self.hablante.callar()
+            self.oyente.escuchar_ahora() if self.oyente.disponible else None
+        elif nombre == "puno":
+            self._alarma_activa = None
+            self.hablante.callar()
+            control.volumen(silenciar=True)
+            self._ui(estado="esperando")
+        elif nombre in ("pulgar_arriba", "pulgar_abajo") and hay_pendiente:
+            self.ejecutar("sí" if nombre == "pulgar_arriba" else "no")
+        elif nombre == "indice":
+            control.volumen(cambio=+10)
+        elif nombre == "dos":
+            control.volumen(cambio=-10)
+        elif nombre == "te_quiero":
+            if getattr(self, "_oculta", False):
+                self.mostrar()
+            else:
+                self._oculta = True
+                self.ventana.hide()
+
+    def mostrar_u_ocultar_gestos(self, encender=None):
+        encender = (not self.camara.activa) if encender is None else encender
+        if encender:
+            self.camara.iniciar()
+        else:
+            self.camara.detener()
+        return encender
+
+    # ---------- arrastrar documentos a la ventana ----------
+    def _activar_soltar_archivos(self):
+        try:
+            from webview.dom import DOMEventHandler
+
+            def al_soltar(e):
+                archivos_soltados = (e.get("dataTransfer") or {}).get("files") or []
+                for a in archivos_soltados[:1]:
+                    ruta = a.get("pywebviewFullPath")
+                    if ruta:
+                        threading.Thread(target=self.ejecutar, args=(f"resume el documento {ruta}",), daemon=True).start()
+
+            self.ventana.dom.document.events.dragover += DOMEventHandler(lambda e: None, True, True)
+            self.ventana.dom.document.events.drop += DOMEventHandler(al_soltar, True, True)
+        except Exception as e:
+            print(f"[jarvis] No se pudo activar arrastrar archivos: {e}")
+
     def iniciar(self):
         api = Api(self)
         self.ventana = webview.create_window(
@@ -215,7 +287,10 @@ class Jarvis:
 
         def al_arrancar():
             self._bandeja()
+            self._activar_soltar_archivos()
             self.oyente.iniciar()
+            if self.ajustes.get("gestos_al_iniciar"):
+                self.camara.iniciar()
             time.sleep(0.5)
             self._avisos_cambiaron()
             self._ui(estado="hablando", expresion="riendo")
@@ -250,6 +325,9 @@ class Api:
 
     def salir(self):
         self._j.salir()
+
+    def gestos(self, encender=None):
+        return self._j.mostrar_u_ocultar_gestos(encender)
 
     def nueva_conversacion(self):
         self._j.conversador.olvidar()
@@ -287,6 +365,7 @@ class Api:
             "clave_final": clave[-4:] if clave else "",
             "voz_motor": a["voz_motor"],
             "modo_conversacion": a["modo_conversacion"],
+            "gestos_al_iniciar": a.get("gestos_al_iniciar", False),
             "nombre": config.NOMBRE_USUARIO,
         }
 

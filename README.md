@@ -77,6 +77,46 @@ vencieron mientras estaba apagado. La campana 🔔 de arriba muestra cuántos ha
 Con Claude puedes crear rutinas nuevas hablando: «crea un modo juego que abra Steam y Discord y
 me avise en una hora». También puedes editarlas a mano en `%LOCALAPPDATA%\Jarvis\rutinas.json`.
 
+### Resumir documentos (nuevo)
+
+Arrastra un **PDF, Word (.docx), PowerPoint (.pptx) o .txt** a la ventana, o di
+«resume el documento informe» (lo busca por nombre). Con Claude te hace un resumen de verdad y luego
+puedes preguntarle cosas: «¿qué dice de las fechas?». Sin internet te da las frases más importantes
+y los temas. Los PDF escaneados (solo imagen) no tienen texto y Jarvis te avisa.
+
+### Controlar el PC (nuevo, sin internet)
+
+| Dices… | Jarvis… |
+|---|---|
+| «Sube el volumen», «volumen al 30», «silencio» | Cambia el volumen |
+| «Baja el brillo», «brillo al 70» | Cambia el brillo de la pantalla |
+| «Apaga el wifi», «enciende el wifi», «¿cómo está el wifi?» | Controla el wifi |
+| «¿Cuánta batería tengo?» | Te dice la batería |
+| «Apaga / reinicia / suspende el computador» | **Te pide confirmación** y apaga en 30 s |
+| «Cancela el apagado» | Lo detiene |
+| «Cierra Chrome» | Lo cierra con calma |
+| «Fuerza el cierre de Word» | Lo cierra a la fuerza (pide confirmación) |
+| «Cierra las aplicaciones que no responden» | Busca las colgadas y te pregunta |
+
+Nunca cierra procesos de Windows ni a sí mismo.
+
+### Lenguaje de señas con la cámara (nuevo, sin internet)
+
+Toca el botón ✋ arriba o di «activa los gestos». La cámara se procesa solo en tu portátil
+(MediaPipe); no se graba ni se envía nada.
+
+| Gesto | Qué hace |
+|---|---|
+| ✋ Mano abierta | Jarvis te escucha |
+| ✊ Puño | Se calla y deja de escuchar |
+| 👍 Pulgar arriba | «Sí» (para confirmar) |
+| 👎 Pulgar abajo | «No» |
+| ☝️ Índice | Sube el volumen |
+| ✌️ Dos dedos | Baja el volumen |
+| 🤟 Te quiero | Muestra u oculta la ventana |
+
+Sostén el gesto casi un segundo. En Ajustes puedes hacer que se enciendan al abrir Jarvis.
+
 ### Memoria
 
 | Dices… | Jarvis… |
@@ -88,7 +128,8 @@ me avise en una hora». También puedes editarlas a mano en `%LOCALAPPDATA%\Jarv
 Con Claude, además, guarda solo lo importante que le cuentas, hace un resumen de cada conversación
 para acordarse la próxima vez, y puede buscar en lo que hablaron otros días («¿qué te dije la
 semana pasada de mi examen?»). Todo se guarda solo en tu portátil, en `%LOCALAPPDATA%\Jarvis\`.
-En la campana 🔔 ves lo que recuerda y puedes borrar cada dato.
+En la campana 🔔 ves lo que recuerda y puedes borrar cada dato. «¿De qué hablamos la última vez?»
+funciona también sin internet, y «olvida todo» borra la memoria (pide confirmación).
 
 ### Expresiones del avatar
 
@@ -123,7 +164,8 @@ con el mismo nombre.
 2. Descarga este proyecto (botón verde **Code → Download ZIP** en GitHub) y descomprímelo,
    por ejemplo en `Documentos\Jarvis`.
 3. Haz doble clic en **`instalar.bat`**. Tarda unos minutos: instala las librerías y descarga
-   el reconocimiento de voz en español (unos 40 MB) y la voz de Jarvis (unos 110 MB).
+   el reconocimiento de voz en español (unos 40 MB), la voz de Jarvis (unos 110 MB) y lo de la
+   cámara para los gestos (unos 60 MB, opcional: si falla, todo lo demás funciona igual).
 
 ¿Ya tenías la versión anterior? Reemplaza los archivos y vuelve a ejecutar `instalar.bat`:
 solo descarga lo nuevo.
@@ -166,13 +208,16 @@ jarvis/
   memoria.py     datos que recuerda de ti y resúmenes de conversaciones
   archivos.py    buscar / abrir / mandar a la papelera, apps del menú Inicio
   seguridad.py   rutas protegidas, registro, Windows Defender, bloquear equipo
+  control.py     volumen, brillo, wifi, batería, apagar, cerrar programas
+  documentos.py  leer y resumir PDF, Word, PowerPoint y texto
+  gestos.py      cámara y reconocimiento de gestos de la mano (MediaPipe)
   ui/            interfaz con tu diseño (HTML + CSS + JS)
 tests/           pruebas automáticas (python -m pytest)
 ```
 
 ## Próximos pasos
 
-- Lenguaje de señas con la cámara (MediaPipe, también offline).
-- Más órdenes: cerrar programas, mover y copiar archivos, controlar el volumen.
+- Más señas (letras del abecedario) y gestos que tú mismo enseñes.
+- Mover y copiar archivos por voz.
 - Un oído más preciso (Whisper local) para que entienda mejor frases largas.
 - Reconocimiento de tu voz para que solo te obedezca a ti.

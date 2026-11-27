@@ -138,6 +138,15 @@ body[data-estado="escuchando"] .pista { color: var(--neon2); }
 .botones button { background: transparent; color: var(--texto); border: 1px solid var(--neon-suave); border-radius: 8px; padding: 7px 12px; cursor: pointer; }
 .botones .primario { background: var(--neon); color: #021022; border-color: var(--neon); font-weight: 600; }
 
+/* ---------- gestos ---------- */
+#btnGestos.activo { background: var(--neon); color: #021022; box-shadow: 0 0 12px var(--neon); }
+.gesto { position: absolute; left: 50%; top: 300px; transform: translateX(-50%); z-index: 3; padding: 6px 14px; border-radius: 18px;
+  background: rgba(6,18,38,.85); border: 1px solid var(--neon); box-shadow: 0 0 16px rgba(31,163,255,.5); font-size: 15px;
+  animation: aparecer .25s ease both; pointer-events: none; }
+.gesto[hidden] { display: none; }
+body.soltando::after { content: "Suelta el documento para que lo resuma"; position: fixed; inset: 10px; z-index: 9; display: grid; place-items: center;
+  border: 2px dashed var(--neon); border-radius: 16px; background: rgba(2,8,20,.8); color: var(--neon2); font-size: 16px; }
+
 /* ---------- agenda ---------- */
 .agenda-btn { position: relative; }
 .insignia { position: absolute; top: -6px; right: -6px; min-width: 15px; height: 15px; padding: 0 3px; border-radius: 8px;

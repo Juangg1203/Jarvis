@@ -48,6 +48,25 @@ def descargar_voz():
     print("Voz de Jarvis lista.")
 
 
+URL_MANOS = ("https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/"
+             "float16/latest/hand_landmarker.task")
+
+
+def descargar_manos():
+    destino = config.RAIZ / "modelos" / "hand_landmarker.task"
+    if destino.exists():
+        return
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    tmp = destino.with_suffix(".part")
+    try:
+        urllib.request.urlretrieve(URL_MANOS, tmp, progreso("Descargando el modelo de manos para los gestos"))
+        tmp.rename(destino)
+        print("\nModelo de gestos listo.")
+    except Exception as e:  # los gestos son opcionales
+        print(f"\nAviso: no se pudo descargar el modelo de gestos ({e}).")
+
+
 if __name__ == "__main__":
     descargar_oido()
     descargar_voz()
+    descargar_manos()
