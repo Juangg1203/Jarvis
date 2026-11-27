@@ -32,8 +32,27 @@ recordar_dato si te cuenta algo personal que valga la pena guardar). Para charla
 Nunca envíes mensajes ni correos: solo los dejas listos."""
 
 
+_LIGERO = {}
+
+
 def modelo() -> str:
-    return ajustes.cargar().get("ollama_modelo") or config.MODELO_OLLAMA
+    """El modelo elegido en Ajustes. Sin elegir: en equipos de 8 GB, el rápido si está instalado."""
+    elegido = ajustes.cargar().get("ollama_modelo")
+    if elegido:
+        return elegido
+    if "usar" not in _LIGERO:
+        from .equipo import poca_ram
+        _LIGERO["usar"] = poca_ram() and tiene(config.MODELO_OLLAMA_RAPIDO, modelos_instalados())
+    return config.MODELO_OLLAMA_RAPIDO if _LIGERO["usar"] else config.MODELO_OLLAMA
+
+
+_MARCA_HORA = re.compile(r"^\s*\[\d{1,2}/\d{1,2}/\d{4} \d{1,2}:\d{2}\]\s*")
+
+
+def sin_hora(mensajes: list) -> list:
+    """Quita la marca «[27/11/2026 14:40]» de tus mensajes: los modelos pequeños la copiaban en la respuesta."""
+    return [dict(m, content=_MARCA_HORA.sub("", m["content"])) if m.get("role") == "user"
+            and isinstance(m.get("content"), str) else m for m in mensajes]
 
 
 class ErrorOllama(ErrorGemini):
@@ -155,7 +174,7 @@ class ConversadorOllama(ConversadorGemini):
     def _ronda(self, cliente, al_texto, al_frase, al_expresion, previo):
         sistema = self._sistema(self._contexto)
         cuerpo = {"model": modelo(), "stream": True, "tools": herramientas(),
-                  "messages": [{"role": "system", "content": sistema}] + self.historial,
+                  "messages": [{"role": "system", "content": sistema}] + sin_hora(self.historial),
                   "options": opciones(), "keep_alive": MANTENER}
         frases = Frases(al_frase, al_texto, al_expresion, previo)
         texto, llamadas = "", []

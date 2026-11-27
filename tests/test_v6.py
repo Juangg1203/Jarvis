@@ -244,3 +244,20 @@ def test_ollama_escribe_sin_herramientas(monkeypatch):
         json.dumps({"message": {"content": "Título\n\nTexto."}}).encode()))
     assert c.escribir("Escribe sobre el clima") == "Título\n\nTexto."
     assert "tools" not in enviados[0] and enviados[0]["options"]["num_predict"] >= 800
+
+
+def test_ollama_sin_marca_de_hora():
+    from jarvis.ollama import sin_hora
+    m = sin_hora([{"role": "user", "content": "[27/11/2026 14:40] clima"},
+                  {"role": "assistant", "content": "[x] hola"}])
+    assert m[0]["content"] == "clima" and m[1]["content"] == "[x] hola"
+
+
+def test_poca_ram_usa_modelos_ligeros(monkeypatch):
+    from jarvis import equipo, ollama, ajustes
+    monkeypatch.setattr(equipo, "ram_total_gb", lambda: 7.7)
+    monkeypatch.setattr(ajustes, "cargar", lambda: {"ollama_modelo": ""})
+    monkeypatch.setattr(ollama, "modelos_instalados", lambda: ["qwen2.5:3b", "qwen2.5:1.5b"])
+    ollama._LIGERO.clear()
+    assert ollama.modelo() == "qwen2.5:1.5b"
+    ollama._LIGERO.clear()

@@ -44,6 +44,20 @@ def fijos():
     return _fijos
 
 
+def ram_total_gb() -> float:
+    """GB de RAM del equipo (16 si no se puede saber)."""
+    try:
+        import psutil
+        return psutil.virtual_memory().total / 1024 ** 3
+    except Exception:
+        return 16.0
+
+
+def poca_ram() -> bool:
+    """Equipos de 8 GB o menos: hay que usar modelos más ligeros o todo se vuelve lento."""
+    return ram_total_gb() < 10
+
+
 def estado(en_linea=None, cerebro="") -> dict:
     import psutil
     f = fijos()

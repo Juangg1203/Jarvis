@@ -30,7 +30,8 @@ class Transcriptor:
         except ImportError:
             print("[oido] faster-whisper no está instalado: uso solo Vosk.")
             return False
-        nombre = ajustes.cargar().get("oido") or config.MODELO_WHISPER
+        from .equipo import poca_ram
+        nombre = ajustes.cargar().get("oido") or ("base" if poca_ram() else config.MODELO_WHISPER)
         try:
             hilos = max(2, (os.cpu_count() or 4) - 1)
             modelo = WhisperModel(nombre, device="cpu", compute_type="int8", cpu_threads=hilos,
