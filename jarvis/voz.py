@@ -183,6 +183,8 @@ class Oyente:
         self.reconoce_hablante = False
         self.error = ""
         self.transcriptor = None  # oido.Transcriptor: Whisper para entender mejor cada orden
+        self._ptt = False                    # botón de hablar presionado
+        self._ptt_soltar = threading.Event()  # se soltó: terminar la orden ya
 
     def _entregar(self, texto, huella=None):
         # En otro hilo, para seguir oyendo (y poder interrumpir) mientras Jarvis piensa y habla.
@@ -192,6 +194,20 @@ class Oyente:
     def escuchar_ahora(self):
         """Como si hubieras dicho 'Jarvis' (botón del micrófono)."""
         self._escuchar_ya.set()
+
+    def ptt_empezar(self):
+        """Mantener presionado para hablar: escucha sin cortar por silencios hasta que sueltes."""
+        self._ptt_soltar.clear()
+        self._ptt = True
+        self._escuchar_ya.set()
+
+    def ptt_terminar(self, corto=False):
+        if not self._ptt:
+            return
+        if corto:  # fue un toque: sigue escuchando y corta cuando te calles
+            self._ptt = False
+        else:
+            self._ptt_soltar.set()
 
     def iniciar(self):
         threading.Thread(target=self._bucle, daemon=True, name="stt").start()
@@ -271,6 +287,8 @@ class Oyente:
         frase = bytearray()            # audio desde que empezó la frase actual (para Whisper)
         ruido = 200.0                   # nivel del ruido de fondo, se ajusta solo
         hablo, ultimo_sonido, inicio = False, 0.0, 0.0
+        soltado_en = None
+        pendiente_ptt = []             # pedazos de la orden mientras mantienes el botón
         maximo = 16000 * 2 * config.MAX_ORDEN_SEG
         self.al_cambiar_estado("esperando")
 
@@ -285,6 +303,8 @@ class Oyente:
                 self._escuchar_ya.clear()
                 rec.Reset()
                 frase.clear()
+                pendiente_ptt.clear()
+                soltado_en = None
                 empezar_a_escuchar()
 
             try:
@@ -315,7 +335,18 @@ class Oyente:
                 del frase[:len(frase) - maximo]
 
             fin = False
-            if escuchando:
+            if self._ptt:
+                activo_hasta = max(activo_hasta, ahora + 5)  # mientras lo mantienes, no se corta
+                escuchando = True
+                if hay_voz:
+                    hablo, ultimo_sonido = True, ahora
+                if self._ptt_soltar.is_set():
+                    if soltado_en is None:
+                        soltado_en = ahora
+                    elif ahora - soltado_en > 0.25:  # un instante más para no comerse la última palabra
+                        self._ptt, soltado_en, fin = False, None, True
+                        self._ptt_soltar.clear()
+            elif escuchando:
                 if hay_voz:
                     hablo, ultimo_sonido = True, ahora
                     activo_hasta = max(activo_hasta, ahora + 3)  # no te corta mientras sigues hablando
@@ -326,9 +357,20 @@ class Oyente:
                 if fin:
                     rec.Reset()
                 texto = resultado.get("text", "").strip()
+                if self._ptt and not fin:
+                    # con el botón presionado, una pausa no termina la orden: se sigue juntando
+                    if texto:
+                        pendiente_ptt.append(texto)
+                    continue
+                if pendiente_ptt:
+                    texto = " ".join(pendiente_ptt + ([texto] if texto else []))
+                    pendiente_ptt.clear()
                 audio_frase, frase = frase, bytearray()
                 if not texto:
                     hablo = False
+                    if fin:
+                        activo_hasta = 0.0
+                        self.al_cambiar_estado("esperando")
                     continue
                 huella = (resultado["spk"], resultado.get("spk_frames", 0)) if resultado.get("spk") else None
                 if escuchando and self._quitar_activacion(texto) == "":  # solo dijiste "Jarvis": sigo esperando

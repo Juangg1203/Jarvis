@@ -100,3 +100,28 @@ def test_quitar_jarvis_del_texto_de_whisper():
     o.transcriptor = types.SimpleNamespace(disponible=True, transcribir=lambda a: "Garfield, pon música.")
     assert o._texto_final("jarvis pon musica", b"x" * 40000, escuchando=False) == "pon musica"
     assert o._texto_final("hola mama como estas", b"x" * 40000, escuchando=False) is None
+
+
+def test_mantener_presionado_no_corta_con_silencios(monkeypatch, tmp_path):
+    flujo = _preparar(monkeypatch, tmp_path)
+    ordenes = []
+    hecho = threading.Event()
+    o = voz.Oyente(lambda e: None, lambda t, h: (ordenes.append(t), hecho.set()), lambda: False)
+    o.transcriptor = None
+    threading.Thread(target=o._bucle, daemon=True).start()
+    while "cb" not in flujo:
+        time.sleep(0.01)
+    o.ptt_empezar()
+    time.sleep(0.6)
+    for amp, seg in ((3000, 0.4), (30, 0.8), (3000, 0.4)):  # una pausa larga a mitad de frase
+        fin = time.monotonic() + seg
+        while time.monotonic() < fin:
+            flujo["cb"](_bloque(amp), 1600, None, None)
+            time.sleep(0.02)
+    assert not hecho.is_set()  # sigue escuchando aunque te quedaste callado
+    o.ptt_terminar()
+    fin = time.monotonic() + 1
+    while time.monotonic() < fin and not hecho.is_set():
+        flujo["cb"](_bloque(30), 1600, None, None)
+        time.sleep(0.02)
+    assert hecho.wait(2) and ordenes == ["abre documento"]

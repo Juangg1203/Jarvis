@@ -22,7 +22,7 @@ POR_DEFECTO = {
     "avisos_seguridad": True,    # avisar de memorias USB nuevas y disco casi lleno
     "celular": False,            # app del celular por el wifi de casa
     "codigo_celular": "",        # código secreto que guarda el celular al escanear el QR
-    "tema": "aurora",            # colores: aurora | oceano | esmeralda | atardecer
+    "tema": "holograma",            # colores: aurora | oceano | esmeralda | atardecer
 }
 
 

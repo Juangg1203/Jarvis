@@ -207,6 +207,18 @@ funciona también sin internet, y «olvida todo» borra la memoria (pide confirm
 Las imágenes están en `jarvis/ui/assets/expresiones/`. Si quieres cambiar alguna, reemplaza el PNG
 con el mismo nombre.
 
+## Versión 7: el orbe holográfico
+
+- **Nuevo Jarvis:** una esfera de cristal azul con anillos en órbita sobre una base de luz. Dentro tiene una onda de
+  sonido y sus caras (feliz, riendo, confundido, preocupado, dormido, sorprendido) según lo que esté haciendo.
+  Cuando habla suelta partículas y ondas de sonido.
+- **Ventana horizontal:** el orbe a la izquierda y la conversación a la derecha. Si haces la ventana angosta, todo
+  se acomoda en una columna.
+- **Panel del equipo** (esquina): hora, batería, procesador, memoria, disco, sistema y si hay internet.
+- **Mantén presionado para hablar:** presiona el micrófono (o la barra espaciadora) mientras hablas y suéltalo al
+  terminar: Jarvis no te corta aunque hagas pausas. Un toque corto funciona como antes.
+- El tema de colores «Holograma (azul)» es el nuevo por defecto; los otros siguen en Ajustes → Colores.
+
 ## Oído preciso y documentos largos (v6.3)
 
 - **Oído preciso (Whisper, sin internet):** Vosk sigue oyendo «Jarvis» al instante, pero cada orden la vuelve a

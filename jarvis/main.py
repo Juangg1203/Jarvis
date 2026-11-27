@@ -709,7 +709,7 @@ class Jarvis:
         api = Api(self)
         self.ventana = webview.create_window(
             "Jarvis", str(UI / "index.html"), js_api=api,
-            width=480, height=840, min_size=(400, 640), background_color="#02050c",
+            width=1280, height=760, min_size=(820, 600), background_color="#030a1f",
         )
         self.ventana.events.closing += self._al_cerrar
 
@@ -748,6 +748,28 @@ class Api:
 
     def callar(self):
         self._j.hablante.callar()
+
+    # ---------- mantener presionado para hablar ----------
+    def hablar_presionado(self):
+        self._j._alarma_activa = None
+        self._j.hablante.callar()
+        self._j.oyente.ptt_empezar()
+
+    def hablar_soltado(self, corto=False):
+        """Al soltar: la orden termina ya. Un toque corto = escuchar hasta que te quedes callado."""
+        self._j.oyente.ptt_terminar(bool(corto))
+
+    def sistema(self):
+        from jarvis import equipo
+        j = self._j
+        proveedor = j.ajustes.get("proveedor", "gemini")
+        nombres = {"gemini": "Gemini", "ollama": "Ollama (sin internet)", "claude": "Claude",
+                   "auto": "Automático"}
+        try:
+            return equipo.estado(internet.en_linea(cache=60), nombres.get(proveedor, proveedor))
+        except Exception as e:
+            print(f"[jarvis] No pude leer el estado del equipo: {e}")
+            return None
 
     def abrir_resultado(self, indice):
         self.enviar_texto(f"abre el {int(indice) + 1}")
