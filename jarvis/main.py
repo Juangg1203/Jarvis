@@ -276,9 +276,19 @@ class Jarvis:
         return self._conversadores[proveedor]
 
     def _precalentar(self):
-        """Si Ollama puede tocar, lo carga en memoria ya, para que la primera respuesta no tarde."""
-        if self.ajustes.get("proveedor") in ("ollama", "auto"):
-            threading.Thread(target=lambda: self._conversador("ollama").precalentar(), daemon=True).start()
+        """Si Ollama va a responder, lo carga en memoria ya, para que la primera respuesta no tarde.
+        En «auto» con internet responde Gemini: entonces Ollama se saca de la memoria (unos 2 GB)."""
+        proveedor = self.ajustes.get("proveedor")
+        if proveedor not in ("ollama", "auto"):
+            return
+
+        def trabajo():
+            from jarvis import ollama as _ollama
+            if proveedor == "auto" and ajustes.clave_gemini() and internet.en_linea():
+                _ollama.liberar()
+            else:
+                self._conversador("ollama").precalentar()
+        threading.Thread(target=trabajo, daemon=True).start()
 
     def _avisar(self, texto, expresion):
         self._ui(estado="hablando", expresion=expresion, respuesta=texto)

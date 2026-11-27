@@ -80,6 +80,17 @@ def _get(ruta, tiempo=3):
         return json.loads(r.read().decode("utf-8"))
 
 
+def liberar():
+    """Saca el modelo de la memoria (cuando responde Gemini, Ollama no necesita ocupar 2 GB)."""
+    try:
+        cuerpo = json.dumps({"model": modelo(), "keep_alive": 0}).encode("utf-8")
+        req = urllib.request.Request(BASE + "/api/generate", data=cuerpo, method="POST",
+                                     headers={"Content-Type": "application/json"})
+        urllib.request.urlopen(req, timeout=5).read()
+    except Exception:
+        pass
+
+
 def modelos_instalados() -> list:
     try:
         return [m["name"] for m in _get("/api/tags").get("models", [])]
