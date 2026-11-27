@@ -302,7 +302,7 @@
         vida: 1, s: Math.random() * 2.2 + 0.8, c });
     }
     chispas = chispas.filter((p) => p.vida > 0).slice(-420);
-    ctx.shadowBlur = 6;
+    ctx.shadowBlur = 0;
     for (const p of chispas) {
       p.x += p.vx; p.y += p.vy; p.vx *= 0.985; p.vy *= 0.985; p.vida -= 0.012;
       ctx.fillStyle = rgba(p.c, p.vida * 0.9); ctx.shadowColor = rgba(p.c, 1);
@@ -315,13 +315,17 @@
   const onda = $("onda"), octx = onda.getContext("2d");
   let nivelObjetivo = 0, nivel = 0, t = 0;
 
+  let nivelCss = -1;
   function dibujar() {
+    // con la ventana escondida en la bandeja no se dibuja nada (ahorra memoria y batería)
+    if (document.hidden) { setTimeout(() => requestAnimationFrame(dibujar), 500); return; }
     t += 1 / 60;
     // suavizado: la voz sube rápido y baja despacio, como un medidor real
     nivel += (nivelObjetivo - nivel) * (nivelObjetivo > nivel ? 0.45 : 0.12);
     const extra = estado === "escuchando" ? 0.18 + Math.sin(t * 3) * 0.06 : estado === "pensando" ? 0.1 : 0;
     const n = Math.max(nivel, extra);
-    raiz.style.setProperty("--nivel", n.toFixed(3));
+    // cambiar una variable CSS recalcula toda la página: solo cuando cambia de verdad
+    if (Math.abs(n - nivelCss) > 0.03) { nivelCss = n; raiz.style.setProperty("--nivel", n.toFixed(2)); }
     actualX += (objetivoX + Math.sin(t * 0.6) * 2 - actualX) * 0.06;
     actualY += (objetivoY + Math.sin(t * 0.4) * 4 - actualY) * 0.06;
 
@@ -352,7 +356,6 @@
       const x = i * ancho + ancho * 0.3, y = (oh - h) / 2;
       const [r, gg, b] = mezcla(i / (barras - 1));
       octx.fillStyle = `rgba(${r},${gg},${b},.85)`;
-      octx.shadowColor = `rgb(${r},${gg},${b})`; octx.shadowBlur = 8;
       octx.fillRect(x, y, ancho * 0.4, h);
     }
     requestAnimationFrame(dibujar);
@@ -497,7 +500,9 @@
     barra("sisCpu", Math.round(s.cpu) + "%", s.cpu, s.cpu >= 85);
     barra("sisRam", s.ram.usada + " / " + s.ram.total + " GB", s.ram.porcentaje, s.ram.porcentaje >= 88);
     barra("sisDisco", s.disco.libre + " GB libres", s.disco.porcentaje, s.disco.porcentaje >= 90);
-    const datos = $("sisDatos"); datos.innerHTML = "";
+    const datos = $("sisDatos"), firma = JSON.stringify(s.datos || []);
+    if (datos.dataset.firma === firma) { if (s.cerebro) $("cerebro").textContent = "Cerebro: " + s.cerebro; return; }
+    datos.dataset.firma = firma; datos.innerHTML = "";
     (s.datos || []).forEach(([k, v]) => {
       const li = document.createElement("li");
       li.innerHTML = "<span></span><b></b>"; li.children[0].textContent = k; li.children[1].textContent = v; li.children[1].title = v;

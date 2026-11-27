@@ -82,9 +82,15 @@ class Jarvis:
                     salida["respuesta"] = (salida["respuesta"] + " " + datos[k]).strip() if k == "mensaje" else datos[k]
         if self.ventana:
             try:
-                self.ventana.evaluate_js(f"window.jarvis && window.jarvis.actualizar({json.dumps(datos)})")
+                self._js(f"window.jarvis && window.jarvis.actualizar({json.dumps(datos)})")
             except Exception:
                 pass
+
+    def _js(self, codigo):
+        """Manda código a la ventana sin esperar respuesta (run_js). evaluate_js espera y guarda cada
+        resultado, y con decenas de llamadas por segundo la ventana se iba llenando de memoria."""
+        correr = getattr(self.ventana, "run_js", None)
+        (correr or self.ventana.evaluate_js)(codigo)
 
     def _nivel(self, n):
         # El nivel del audio mueve la boca/brillo del avatar y la onda de voz.
@@ -92,7 +98,7 @@ class Jarvis:
             self._ultimo_nivel = n
             if self.ventana:
                 try:
-                    self.ventana.evaluate_js(f"window.jarvis && window.jarvis.nivel({n:.2f})")
+                    self._js(f"window.jarvis && window.jarvis.nivel({n:.2f})")
                 except Exception:
                     pass
 
