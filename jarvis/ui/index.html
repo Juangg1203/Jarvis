@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Jarvis</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="marco">
+    <header class="barra">
+      <span class="titulo">J.A.R.V.I.S</span>
+      <span class="estado-punto" id="punto"></span>
+      <span class="estado-texto" id="estadoTexto">Iniciando…</span>
+      <button class="icono-btn" id="btnOcultar" title="Seguir en segundo plano">—</button>
+    </header>
+
+    <section class="holograma">
+      <div class="esquinas"></div>
+      <div class="avatar-caja">
+        <img id="avatar" src="assets/expresiones/normal.png" alt="Avatar de Jarvis">
+        <div class="escaner"></div>
+      </div>
+      <div class="pedestal">
+        <span></span><span></span><span></span>
+      </div>
+    </section>
+
+    <section class="onda" id="onda">
+      <div class="barras izq" id="ondaIzq"></div>
+      <span id="ondaTexto">En espera</span>
+      <div class="barras der" id="ondaDer"></div>
+    </section>
+
+    <section class="chat" id="chat"></section>
+
+    <ul class="resultados" id="resultados"></ul>
+
+    <form class="entrada" id="formulario">
+      <button type="button" class="mic" id="btnMic" title="Hablar ahora">
+        <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2Z"/></svg>
+      </button>
+      <input id="texto" autocomplete="off" placeholder="Di «Jarvis…» o escribe una orden">
+      <button type="submit" class="enviar">Enviar</button>
+    </form>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>
