@@ -155,3 +155,62 @@ def test_ordenes_de_notificaciones_y_pantalla(monkeypatch):
     monkeypatch.setattr(notificaciones, "abrir_whatsapp", lambda: None)
     r = c.procesar("respóndele a Mamá que sí voy a almorzar")
     assert copiado == ["sí voy a almorzar"] and "pega" in r.texto
+
+
+# ---------- v6.2: peticiones naturales, carpetas conocidas, Ollama rápido y modo automático ----------
+def test_limpiar_peticion():
+    from jarvis.texto import limpiar_peticion, normalizar
+    casos = {
+        "hola yerbas quiero que abras la carpeta de documentos": "abre la carpeta de documentos",
+        "quiero que me organices los documentos": "organiza los documentos",
+        "me puedes decir la hora": "dime la hora",
+        "Jarvis, ¿puedes poner música de Bad Bunny?": "pon musica de bad bunny",
+        "quiero que me recuerdes en 10 minutos sacar la ropa": "recuerdame en 10 minutos sacar la ropa",
+        "buenas tardes": "buenas tardes",
+        "quiero saber el clima": "quiero saber el clima",
+        "sí por favor": "si",
+    }
+    for dicho, esperado in casos.items():
+        assert limpiar_peticion(normalizar(dicho)) == esperado
+
+
+def test_abrir_y_ordenar_carpetas_dicho_natural(tmp_path, monkeypatch):
+    tmp_path = tmp_path / "Documentos"
+    tmp_path.mkdir()
+    abiertos = []
+    monkeypatch.setattr(organizar, "carpeta", lambda n: tmp_path if n == "documentos" else None)
+    from jarvis import archivos
+    monkeypatch.setattr(archivos, "abrir", abiertos.append)
+    c = Cerebro()
+    r = c.procesar("hola yerbas quiero que abras la carpeta de documentos", solo_ordenes=True)
+    assert r.entendida and abiertos == [str(tmp_path)]
+    (tmp_path / "Tareas").mkdir()
+    (tmp_path / "Fotos viaje").mkdir()
+    r = c.procesar("quiero que me organices los documentos", solo_ordenes=True)
+    assert "no hay archivos sueltos" in r.texto and "2 carpetas" in r.texto and not c.pendiente_accion
+    assert c.procesar("me puedes decir la hora").texto.startswith("Son las")
+
+
+def test_ollama_corto_y_precalentado(monkeypatch):
+    import json as _json
+    assert len(ollama.SISTEMA_OLLAMA) < 1200 and len(_json.dumps(ollama.herramientas())) < 3000
+    assert ollama.opciones()["num_ctx"] <= 4096
+    from jarvis import ajustes
+    ajustes.guardar({"ollama_modelo": "qwen2.5:1.5b"})
+    assert ollama.modelo() == "qwen2.5:1.5b"
+    ajustes.guardar({"ollama_modelo": ""})
+    assert ollama.modelo() == ollama.config.MODELO_OLLAMA
+
+
+def test_en_linea_se_guarda_un_rato(monkeypatch):
+    from jarvis import internet
+    llamadas = []
+
+    def conectar(*a, **k):
+        llamadas.append(1)
+        raise OSError
+
+    monkeypatch.setattr(internet.socket, "create_connection", conectar)
+    monkeypatch.setattr(internet, "_en_linea", (0.0, True))
+    internet._en_linea = (-1e9, True)
+    assert internet.en_linea() is False and internet.en_linea() is False and len(llamadas) == 1

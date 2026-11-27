@@ -33,8 +33,37 @@ def _DESHACER():
     return config.CARPETA_DATOS / "ultimo_orden.json"
 
 
+# Nombre de cada carpeta en el registro de Windows: dice dónde está de verdad (por ejemplo, dentro de OneDrive).
+REGISTRO = {"descargas": "{374DE290-123F-4565-9164-39C4925E467B}", "escritorio": "Desktop", "documentos": "Personal",
+            "imagenes": "My Pictures", "fotos": "My Pictures", "videos": "My Video", "musica": "My Music"}
+
+
+def _carpeta_windows(nombre):
+    if os.name != "nt" or nombre not in REGISTRO:
+        return None
+    try:
+        import winreg
+        clave = r"Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders"
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, clave) as k:
+            valor, _ = winreg.QueryValueEx(k, REGISTRO[nombre])
+        ruta = Path(os.path.expandvars(valor))
+        return ruta if ruta.is_dir() else None
+    except OSError:
+        return None
+
+
+def contar_subcarpetas(origen: Path) -> int:
+    try:
+        return sum(1 for a in origen.iterdir() if a.is_dir() and not a.name.startswith("."))
+    except OSError:
+        return 0
+
+
 def carpeta(nombre: str):
-    """'descargas' -> Path real (también dentro de OneDrive)."""
+    """'descargas' -> Path real (la que usa Windows, también si está dentro de OneDrive)."""
+    ruta = _carpeta_windows(nombre)
+    if ruta:
+        return ruta
     for n in CARPETAS.get(nombre, ()):
         for base in (config.HOME, config.HOME / "OneDrive"):
             if (base / n).is_dir():

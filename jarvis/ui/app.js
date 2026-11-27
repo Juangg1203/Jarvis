@@ -24,10 +24,6 @@
   function ponerTema(tema) {
     document.body.dataset.tema = tema || "aurora";
     try { localStorage.setItem("jarvisTema", document.body.dataset.tema); } catch (e) {}
-    document.querySelectorAll("#temas [data-tema]").forEach((b) => {
-      const si = b.dataset.tema === document.body.dataset.tema;
-      b.classList.toggle("activo", si); b.setAttribute("aria-checked", si);
-    });
     leerColores();
   }
   try { ponerTema(localStorage.getItem("jarvisTema")); } catch (e) { ponerTema("aurora"); }
@@ -287,6 +283,7 @@
       : "Sin clave: Jarvis solo hace las órdenes del computador.";
     $("motor").value = a.voz_motor;
     $("proveedor").value = a.proveedor || "gemini";
+    $("ollamaModelo").value = a.ollama_modelo || "qwen2.5:3b";
     $("claveGemini").value = "";
     $("geminiEstado").textContent = a.tiene_gemini
       ? "Clave guardada (termina en " + a.gemini_final + "). Escribe otra solo si quieres cambiarla."
@@ -319,16 +316,26 @@
   $("tema").onchange = () => ponerTema($("tema").value);
   async function mostrarProveedor() {
     const p = $("proveedor").value;
-    $("campoClaude").hidden = p !== "claude"; $("campoGemini").hidden = p !== "gemini"; $("campoOllama").hidden = p !== "ollama";
-    if (p !== "ollama" || !api() || !api().estado_ollama) return;
+    $("campoClaude").hidden = p !== "claude"; $("campoGemini").hidden = p !== "gemini" && p !== "auto";
+    $("campoOllama").hidden = p !== "ollama" && p !== "auto";
+    if ((p !== "ollama" && p !== "auto") || !api() || !api().estado_ollama) return;
     $("ollamaEstado").textContent = "Revisando Ollama…";
     const o = await api().estado_ollama();
-    $("btnOllama").hidden = o.modelo;
-    $("ollamaEstado").textContent = o.modelo
-      ? "✅ Ollama está listo con " + o.nombre + (o.vision ? " y el modelo de visión." : ". Todo se queda en tu portátil.")
+    const rapido = $("ollamaModelo").value === (o.modelo_rapido || "qwen2.5:1.5b");
+    const listo = o.modelo_rapido ? (rapido ? o.rapido : o.normal) : o.modelo;
+    $("btnOllama").hidden = listo || (o.instalado && o.abierto);
+    $("btnOllamaRapido").hidden = !(o.abierto && rapido && !o.rapido);
+    $("ollamaEstado").textContent = listo
+      ? "✅ Ollama está listo" + (rapido ? " con el cerebro rápido." : " con el cerebro más listo.") + " Todo se queda en tu portátil."
+      : o.abierto && rapido ? "Falta el cerebro rápido: toca el botón para descargarlo (1 GB)."
       : o.instalado && !o.abierto ? "Ollama está instalado pero cerrado. Ábrelo desde el menú Inicio, o toca el botón para terminar la instalación."
+      : o.abierto ? "Falta el cerebro más listo: toca el botón para descargarlo."
       : "Ollama no está instalado. Toca el botón: se abre una ventana que lo instala y descarga el cerebro (unos minutos).";
   }
+  $("ollamaModelo").onchange = mostrarProveedor;
+  $("btnOllamaRapido").onclick = async () => {
+    if (await api().instalar_ollama(true)) $("ollamaEstado").textContent = "Descargando el cerebro rápido en otra ventana. Cuando termine, vuelve a abrir Ajustes.";
+  };
   $("btnOllama").onclick = async () => {
     if (await api().instalar_ollama()) $("ollamaEstado").textContent = "Se abrió la ventana del instalador. Cuando termine, vuelve a abrir Ajustes.";
   };
@@ -340,6 +347,7 @@
       anthropic_api_key: $("clave").value.trim(),
       gemini_api_key: $("claveGemini").value.trim(),
       proveedor: $("proveedor").value,
+      ollama_modelo: $("ollamaModelo").value,
       voz_motor: $("motor").value,
       modo_conversacion: $("conversacion").checked,
       gestos_al_iniciar: $("gestosInicio").checked,
@@ -392,28 +400,8 @@
 
   window.addEventListener("pywebviewready", async () => {
     window.jarvis.actualizar({ estado: "esperando" });
-    try { const a = await api().leer_ajustes(); ponerTema(a.tema); nombre = a.nombre || ""; saludar(); window.jarvis.actualizar({ vigilando: a.vigilando }); } catch (e) {}
+    try { const a = await api().leer_ajustes(); ponerTema(a.tema); window.jarvis.actualizar({ vigilando: a.vigilando }); } catch (e) {}
   });
-
-  // ---------- diseño: saludo, atajos, colores y cerrar paneles ----------
-  let nombre = "";
-  function saludar() {
-    const h = new Date().getHours();
-    const parte = h < 5 ? "Buenas noches" : h < 12 ? "Buenos días" : h < 19 ? "Buenas tardes" : "Buenas noches";
-    const hora = new Date().toLocaleTimeString("es", { hour: "numeric", minute: "2-digit" });
-    $("saludo").textContent = parte + (nombre ? ", " + nombre : "") + " · " + hora;
-  }
-  saludar(); setInterval(saludar, 20000);
-  document.querySelectorAll("#atajos button").forEach((b) => b.onclick = () => {
-    const caja = $("texto");
-    if (b.dataset.completar) { caja.value = b.dataset.completar; caja.focus(); return; }
-    if (api()) { api().enviar_texto(b.dataset.texto); }
-  });
-  document.querySelectorAll("#temas [data-tema]").forEach((b) => b.onclick = () => {
-    $("tema").value = b.dataset.tema; ponerTema(b.dataset.tema);
-  });
-  document.querySelectorAll("[data-cerrar]").forEach((b) => b.onclick = () => { b.closest(".ajustes").hidden = true; });
-  ponerTema(document.body.dataset.tema);
 
   // Modo demostración al abrir index.html en un navegador normal.
   setTimeout(() => {
@@ -430,7 +418,7 @@
     window.pywebview = { api: {
       enviar_texto: (t) => { jarvis.actualizar({ estado: "pensando", orden: t }); setTimeout(() => hablar("(Demo) Hola, soy Jarvis. Recibí: " + t, "guino"), 700); },
       escuchar: () => jarvis.actualizar({ estado: "escuchando" }), callar() {}, ocultar() {}, abrir_resultado() {},
-      leer_ajustes: async () => ({ nombre: "Juan", tiene_clave: false, proveedor: "gemini", tiene_gemini: true, gemini_final: "x9Qk", voz_motor: "piper", modo_conversacion: true, tema: document.body.dataset.tema,
+      leer_ajustes: async () => ({ tiene_clave: false, proveedor: "gemini", tiene_gemini: true, gemini_final: "x9Qk", voz_motor: "piper", modo_conversacion: true, tema: document.body.dataset.tema,
         conoce_voz: true, conoce_cara: false, solo_dueno: true, avisos_seguridad: true, celular: true, celular_activo: true,
         celular_direccion: "http://192.168.1.20:8765/",
         celular_qr: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 21 21"><path d="M1 1h7v7H1zM13 1h7v7h-7zM1 13h7v7H1zM10 3h2v2h-2zM10 9h3v2h-3zM15 11h2v3h-2zM10 14h2v5h-2zM14 16h5v2h-5z"/></svg>' }),

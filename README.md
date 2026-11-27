@@ -50,9 +50,14 @@ sigue haciendo las órdenes del computador. Google puede usar lo que hablas en e
 mejorar sus productos, así que no le cuentes datos delicados. El modelo (`gemini-flash-latest`) se
 cambia en `jarvis/config.py`.
 
+**Automático (recomendado):** usa Gemini cuando hay internet (rápido) y Ollama cuando no lo hay. Si Gemini
+falla o se acaba la cuota gratis, esa respuesta la da Ollama.
+
 **Ollama (gratis y sin internet):** la IA corre dentro de tu portátil y nada sale de él. Ejecuta
 `instalar_ollama.bat` una vez (descarga Ollama y el modelo `qwen2.5:3b`, unos 2 GB) y en Ajustes elige
-«Ollama». Es más lento y menos listo que Gemini, pero no tiene límites ni necesita conexión. Para que
+«Ollama». Es más lento y menos listo que Gemini, pero no tiene límites ni necesita conexión. En Ajustes puedes elegir
+el cerebro «Rápido» (`qwen2.5:1.5b`, 1 GB), que responde más o menos el doble de rápido en portátiles sin
+tarjeta gráfica. Jarvis lo deja cargado en memoria al abrirse, así la primera respuesta no tarda. Para que
 también pueda mirar tu pantalla sin internet, instala el modelo de visión con
 `instalar_ollama.bat --vision` (unos 3 GB más).
 

@@ -9,7 +9,8 @@ def _ARCHIVO():
 
 
 POR_DEFECTO = {
-    "proveedor": "gemini",      # quién conversa: gemini (gratis) | claude (de pago)
+    "proveedor": "gemini",      # quién conversa: auto (Gemini con internet, Ollama sin él) | gemini | ollama | claude
+    "ollama_modelo": "",        # vacío = config.MODELO_OLLAMA
     "gemini_api_key": "",
     "anthropic_api_key": "",
     "voz_motor": "piper",       # piper (natural, sin internet) | edge (más natural, con internet) | windows

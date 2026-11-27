@@ -34,3 +34,47 @@ def extraer_numero(texto: str):
     if palabra.isdigit():
         return int(palabra)
     return NUMEROS.get(palabra)
+
+
+# ---------- peticiones dichas de forma natural -> orden directa ----------
+_SALUDO = r"(?:hola|oye|hey|ey|buenos dias|buenas tardes|buenas noches|buenas|ok|okey|bueno|porfa|por favor|" \
+          r"jarvis|yarvis|jarbis|yarbis|harvis|charvis|jarvi|yervis|garbis|yerbas|jarbas|yarbas|jervis)"
+_CORTESIA = r"(?:(?:yo )?(?:quiero|quisiera|necesito|me gustaria) que (?:tu )?|(?:tu )?(?:puedes|podrias|pudieras)|" \
+            r"ayudame a|hazme el favor de|por favor|porfa)"
+# subjuntivo o infinitivo -> imperativo ("que abras" / "puedes abrir" -> "abre")
+_VERBOS = {
+    "abre": ("abras", "abrir"), "cierra": ("cierres", "cerrar"), "busca": ("busques", "buscar"),
+    "organiza": ("organices", "organizar"), "ordena": ("ordenes", "ordenar"), "acomoda": ("acomodes", "acomodar"),
+    "pon": ("pongas", "poner"), "lee": ("leas", "leer"), "resume": ("resumas", "resumir"),
+    "apaga": ("apagues", "apagar"), "reinicia": ("reinicies", "reiniciar"), "bloquea": ("bloquees", "bloquear"),
+    "sube": ("subas", "subir"), "baja": ("bajes", "bajar"), "escribe": ("escribas", "escribir"),
+    "muestra": ("muestres", "mostrar"), "di": ("digas", "decir"), "vigila": ("vigiles", "vigilar"),
+    "borra": ("borres", "borrar"), "elimina": ("elimines", "eliminar"), "crea": ("crees", "crear"),
+    "mira": ("mires", "mirar"), "revisa": ("revises", "revisar"), "quita": ("quites", "quitar"),
+    "recuerda": ("recuerdes", "recordar"), "silencia": ("silencies", "silenciar"), "dicta": ("dictes", "dictar"),
+    "reproduce": ("reproduzcas", "reproducir"), "deshaz": ("deshagas", "deshacer"), "analiza": ("analices", "analizar"),
+}
+_A_IMPERATIVO = {forma: imp for imp, formas in _VERBOS.items() for forma in formas}
+_CON_ME = {"di": "dime", "recuerda": "recuerdame", "pon": "ponme", "muestra": "muestrame", "lee": "leeme",
+           "busca": "buscame", "resume": "resumeme"}
+
+
+def limpiar_peticion(t: str) -> str:
+    """'hola jarvis quiero que me abras la carpeta de documentos' -> 'abre la carpeta de documentos'.
+
+    Recibe un texto ya normalizado. Si solo era un saludo, lo devuelve igual."""
+    limpio = t
+    while True:
+        nuevo = re.sub(r"^(?:tu )?me (?:puedes|podrias|pudieras) ", "me ", limpio)
+        nuevo = re.sub(rf"^(?:{_SALUDO}|{_CORTESIA})\b\s*", "", nuevo)
+        if nuevo == limpio:
+            break
+        limpio = nuevo
+    limpio = re.sub(r"\s+(?:por favor|porfa|porfavor|gracias)$", "", limpio)
+    m = re.match(r"^(me |te )?(\w+)\b(.*)$", limpio)
+    if m and (m.group(2) in _A_IMPERATIVO or (m.group(1) and m.group(2) in _VERBOS)):
+        verbo = _A_IMPERATIVO.get(m.group(2), m.group(2))
+        if m.group(1) == "me ":
+            verbo = _CON_ME.get(verbo, verbo)
+        limpio = verbo + m.group(3)
+    return limpio.strip() or t

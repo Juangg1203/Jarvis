@@ -5,6 +5,8 @@ usa servicios gratuitos y sin registro: Open-Meteo (clima), Google Noticias (RSS
 """
 import json
 import re
+import socket
+import time
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
@@ -129,3 +131,21 @@ def preguntar(consulta: str) -> str:
 def abrir_en_navegador(consulta: str):
     import webbrowser
     webbrowser.open("https://www.google.com/search?q=" + urllib.parse.quote(consulta))
+
+
+_en_linea = (0.0, False)
+
+
+def en_linea(cache=30) -> bool:
+    """¿Hay internet? Prueba a conectar con Google (sin enviar nada) y guarda la respuesta unos segundos."""
+    global _en_linea
+    cuando, ok = _en_linea
+    if time.monotonic() - cuando < cache:
+        return ok
+    try:
+        socket.create_connection(("generativelanguage.googleapis.com", 443), timeout=1.5).close()
+        ok = True
+    except OSError:
+        ok = False
+    _en_linea = (time.monotonic(), ok)
+    return ok

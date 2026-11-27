@@ -13,7 +13,7 @@ import os as _os
 from . import archivos, config, control, documentos, internet, musica, organizar, recordatorios, redactar, seguridad
 from .memoria import Memoria
 from .rutinas import Rutinas
-from .texto import extraer_numero, normalizar
+from .texto import extraer_numero, limpiar_peticion, normalizar
 
 
 @dataclass
@@ -68,6 +68,9 @@ class Cerebro:
             t = t.split(" ", 1)[1] if " " in t else ""
         if not t:
             return Respuesta("No escuché nada.", "pensando")
+        limpio = limpiar_peticion(t)  # "quiero que me abras..." -> "abre..."
+        if limpio != t:
+            texto = t = limpio
         seguridad.registrar("orden", t)
 
         if self.pendiente_borrar:
@@ -86,7 +89,7 @@ class Cerebro:
             return Respuesta("", "normal", entendida=False)
         if t in {"hola", "hola jarvis", "buenas", "buenos dias", "buenas tardes", "buenas noches"}:
             return Respuesta(f"Hola, {config.NOMBRE_USUARIO}. ¿En qué te ayudo?", "riendo")
-        if "que hora" in t:
+        if "que hora" in t or t in {"dime la hora", "di la hora", "la hora"}:
             return Respuesta(f"Son las {datetime.datetime.now():%H:%M}.", "normal")
         if "que dia" in t or "fecha" in t:
             meses = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto",
@@ -182,7 +185,13 @@ class Cerebro:
             return Respuesta(f"No encontré la carpeta {nombre}.", "pensando")
         plan = organizar.planear(origen, "fecha" if modo == "fecha" else "tipo")
         if not plan:
-            return Respuesta(f"La carpeta {origen.name} ya está ordenada: no hay archivos sueltos.", "guino")
+            n = organizar.contar_subcarpetas(origen)
+            if n:
+                return Respuesta(f"En {origen.name} no hay archivos sueltos: todo ya está dentro de {n} "
+                                 f"{'carpeta' if n == 1 else 'carpetas'}. Solo ordeno los archivos sueltos, para no "
+                                 f"desarmar las carpetas que tú hiciste. Si quieres, di «abre {origen.name.lower()}».",
+                                 "guino")
+            return Respuesta(f"La carpeta {origen.name} está vacía: no hay nada que ordenar.", "guino")
         n = len(plan)
         pregunta = (f"En {origen.name} hay {n} {'archivo suelto' if n == 1 else 'archivos sueltos'}. Voy a mover "
                     f"{organizar.describir(plan)}. Si no te gusta, di «deshaz el orden». ¿Lo hago?")
@@ -240,6 +249,16 @@ class Cerebro:
             if consulta in {"musica", "algo", "una cancion", "musica para estudiar", "musica para concentrarme"}:
                 consulta = "música para estudiar lofi" if "estudiar" in consulta or "concentr" in consulta or consulta in {"musica", "algo", "una cancion"} else consulta
             return self.reproducir(consulta, m.group(2) or "youtube")
+        # abrir carpetas conocidas (Documentos, Descargas...), también si están en OneDrive
+        m = re.match(r"^(?:abre|abreme|muestrame|ensename|ve a|vamos a|llevame a)\s+(?:a )?(?:la |mi |mis |el |los )?"
+                     r"(?:carpeta\s+(?:de\s+)?(?:mis\s+|las\s+|los\s+)?)?"
+                     r"(descargas|escritorio|documentos|imagenes|fotos|videos|musica)$", t)
+        if m:
+            carpeta = organizar.carpeta(m.group(1))
+            if carpeta is None:
+                return Respuesta(f"No encontré tu carpeta de {m.group(1)}.", "pensando")
+            archivos.abrir(str(carpeta))
+            return Respuesta(f"Listo, abrí {carpeta.name}.", "guino")
         # ordenar carpetas
         m = re.search(r"^(?:ordena|organiza|acomoda|arregla)(?:me)?\s+(?:mi |mis |la |las |el |los )?(?:carpeta (?:de )?)?"
                       r"(descargas|escritorio|documentos|imagenes|fotos|videos|musica)(?:\s+por\s+(tipo|fecha|mes))?", t)

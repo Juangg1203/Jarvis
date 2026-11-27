@@ -21,7 +21,7 @@ from jarvis import redactar
 from jarvis.ia import Conversador
 from jarvis.memoria import Memoria
 from jarvis.rutinas import Rutinas
-from jarvis import celular, control, gestos, identidad, seguridad, vigilancia
+from jarvis import celular, control, gestos, identidad, internet, seguridad, vigilancia
 from jarvis.texto import normalizar
 from jarvis.voz import Hablante, Oyente
 
@@ -230,6 +230,12 @@ class Jarvis:
             self._ui(respuesta_fin=True)
             self._avisos_cambiaron()
         except ErrorGemini as e:
+            otro = self._conversador("ollama")
+            if (self.ajustes.get("proveedor") == "auto" and not estado["empezo"] and self.conversador is not otro
+                    and otro.disponible()):
+                print(f"[jarvis] Gemini falló ({e.mensaje}); respondo con Ollama.")
+                self.conversador = otro
+                return self._conversar(texto)
             self._avisar(e.mensaje, e.cara)
         except anthropic.AuthenticationError:
             self._avisar("Mi clave de Claude no es válida. Revísala en Ajustes.", "triste")
@@ -247,14 +253,25 @@ class Jarvis:
             self._avisar("Algo salió mal al pensar la respuesta.", "triste")
         self._despues(self._al_terminar_de_hablar)
 
-    def _conversador(self):
-        """El cerebro para conversar que elegiste en Ajustes: Gemini (gratis) o Claude."""
-        proveedor = self.ajustes.get("proveedor")
+    def _conversador(self, proveedor=None):
+        """El cerebro para conversar que elegiste en Ajustes.
+
+        «auto»: Gemini cuando hay internet y clave (rápido y gratis); Ollama cuando no hay internet."""
+        proveedor = proveedor or self.ajustes.get("proveedor")
+        if proveedor == "auto":
+            proveedor = "gemini" if ajustes.clave_gemini() and internet.en_linea() else "ollama"
+            if proveedor == "ollama" and not self._conversador("ollama").disponible():
+                proveedor = "gemini"
         proveedor = proveedor if proveedor in ("claude", "ollama") else "gemini"
         if proveedor not in self._conversadores:
             clase = {"claude": Conversador, "ollama": ConversadorOllama}.get(proveedor, ConversadorGemini)
             self._conversadores[proveedor] = clase(self.cerebro)
         return self._conversadores[proveedor]
+
+    def _precalentar(self):
+        """Si Ollama puede tocar, lo carga en memoria ya, para que la primera respuesta no tarde."""
+        if self.ajustes.get("proveedor") in ("ollama", "auto"):
+            threading.Thread(target=lambda: self._conversador("ollama").precalentar(), daemon=True).start()
 
     def _avisar(self, texto, expresion):
         self._ui(estado="hablando", expresion=expresion, respuesta=texto)
@@ -649,6 +666,7 @@ class Jarvis:
             self.monitor.iniciar()
             if self.ajustes.get("celular"):
                 self.activar_celular(True)
+            self._precalentar()
             time.sleep(0.5)
             self._avisos_cambiaron()
             self._ui(estado="hablando", expresion="riendo")
@@ -722,6 +740,7 @@ class Api:
         datos = {
             "tiene_clave": bool(clave),
             "proveedor": a.get("proveedor", "gemini"),
+            "ollama_modelo": a.get("ollama_modelo") or config.MODELO_OLLAMA,
             "tiene_gemini": bool(ajustes.clave_gemini()),
             "gemini_final": ajustes.clave_gemini()[-4:],
             "clave_final": clave[-4:] if clave else "",
@@ -759,6 +778,8 @@ class Api:
         j.monitor.activo = a.get("avisos_seguridad", True)
         if a.get("celular") != antes.get("celular") or (a.get("celular") and not j.celular):
             j.activar_celular(bool(a.get("celular")))
+        if (a.get("proveedor"), a.get("ollama_modelo")) != (antes.get("proveedor"), antes.get("ollama_modelo")):
+            j._precalentar()
         return self.leer_ajustes()
 
     def estado_ollama(self):
@@ -767,15 +788,20 @@ class Api:
         instalados = ollama.modelos_instalados()
         exe = os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs", "Ollama", "ollama.exe")
         return {"instalado": bool(instalados) or os.path.exists(exe) or bool(shutil.which("ollama")),
-                "abierto": bool(instalados), "modelo": ollama.tiene(config.MODELO_OLLAMA, instalados),
-                "vision": ollama.tiene(config.MODELO_OLLAMA_VISION, instalados), "nombre": config.MODELO_OLLAMA}
+                "abierto": bool(instalados), "modelo": ollama.tiene(ollama.modelo(), instalados),
+                "rapido": ollama.tiene(config.MODELO_OLLAMA_RAPIDO, instalados),
+                "normal": ollama.tiene(config.MODELO_OLLAMA, instalados),
+                "elegido": ollama.modelo(), "modelo_rapido": config.MODELO_OLLAMA_RAPIDO,
+                "modelo_normal": config.MODELO_OLLAMA,
+                "vision": ollama.tiene(config.MODELO_OLLAMA_VISION, instalados), "nombre": ollama.modelo()}
 
-    def instalar_ollama(self):
-        """Abre el instalador en una ventana aparte (descarga unos 2 GB)."""
+    def instalar_ollama(self, rapido=False):
+        """Abre el instalador en una ventana aparte (descarga unos 3 GB; solo el cerebro rápido: 1 GB)."""
         import subprocess
         bat = config.RAIZ / "instalar_ollama.bat"
         if sys.platform == "win32" and bat.exists():
-            subprocess.Popen(["cmd", "/c", "start", "Instalar Ollama", str(bat)], cwd=str(config.RAIZ))
+            extra = ["--rapido"] if rapido else []
+            subprocess.Popen(["cmd", "/c", "start", "Instalar Ollama", str(bat), *extra], cwd=str(config.RAIZ))
             return True
         return False
 

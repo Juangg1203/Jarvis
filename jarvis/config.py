@@ -22,6 +22,7 @@ MODELO_GEMINI_RESPALDO = "gemini-2.5-flash"
 
 # Ollama (conversación GRATIS y SIN INTERNET, en tu propio portátil). Se instala con instalar_ollama.bat.
 MODELO_OLLAMA = "qwen2.5:3b"            # unos 2 GB; si tu portátil tiene 16 GB de RAM puedes probar "qwen2.5:7b"
+MODELO_OLLAMA_RAPIDO = "qwen2.5:1.5b"   # 1 GB: responde más o menos el doble de rápido, pero entiende menos
 MODELO_OLLAMA_VISION = "qwen2.5vl:3b"   # opcional, para «mira mi pantalla» sin internet (unos 3 GB)
 
 # Claude (conversación, de pago). Necesita internet y una clave de API de console.anthropic.com.
