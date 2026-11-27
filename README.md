@@ -31,25 +31,31 @@ También puedes **escribir** en la caja de abajo o tocar el **micrófono del cen
 Después de responder, Jarvis **sigue escuchando unos segundos** para que la charla fluya sin
 repetir «Jarvis» cada vez (se puede apagar en Ajustes ⚙).
 
-## Conversar con Claude (opcional)
+## Conversar (gratis con Gemini)
 
-Con Claude, Jarvis deja de ser solo un ejecutor de órdenes: charla contigo, responde preguntas,
-recuerda lo que hablaron en la conversación y entiende frases como «búscame las fotos que bajé
-de la galería» aunque el micrófono las entienda a medias. También puede usar las órdenes del
-computador por ti (buscar, abrir, revisar la seguridad...). Para borrar, **siempre** tienes que
-decir «sí» tú mismo.
+Con un "cerebro" de IA, Jarvis deja de ser solo un ejecutor de órdenes: charla contigo, responde
+preguntas, busca en internet, recuerda lo que hablaron y entiende frases aunque el micrófono las
+entienda a medias. También usa las órdenes del computador por ti. Para borrar o apagar, **siempre**
+tienes que decir «sí» tú mismo.
 
-Cómo activarlo:
+**Gemini de Google (gratis, la opción por defecto):**
 
-1. Entra en <https://console.anthropic.com>, crea una cuenta y carga saldo (Billing). Es de pago
-   por uso: cada respuesta corta cuesta alrededor de uno o dos centavos de dólar con el modelo que usa
-   Jarvis (`claude-opus-5-5`, configurable en `jarvis/config.py`).
-2. En **API Keys** crea una clave (empieza por `sk-ant-`).
-3. En Jarvis toca ⚙ **Ajustes**, pégala en «Clave de Claude» y pulsa **Guardar**.
+1. Entra en <https://aistudio.google.com> con tu cuenta de Google.
+2. Toca **Get API key** → **Crear clave de API** (si te pide un proyecto, crea uno nuevo).
+   La clave empieza por `AIza`. No necesitas tarjeta.
+3. En Jarvis toca ⚙ **Ajustes** → «Cerebro para conversar: Gemini», pega la clave y pulsa **Guardar**.
 
-La clave se guarda solo en tu computador (`%LOCALAPPDATA%\Jarvis\ajustes.json`).
-Lo que hablas con Claude viaja por internet a Anthropic; las órdenes locales no.
-Si no hay internet o se acaba el saldo, Jarvis te lo dice y sigue haciendo las órdenes locales.
+El plan gratis tiene un límite de preguntas por minuto y por día. Si se acaba, Jarvis te lo dice y
+sigue haciendo las órdenes del computador. Google puede usar lo que hablas en el plan gratis para
+mejorar sus productos, así que no le cuentes datos delicados. El modelo (`gemini-flash-latest`) se
+cambia en `jarvis/config.py`.
+
+**Claude (de pago, opcional):** en <https://console.anthropic.com> cargas saldo y creas una clave
+`sk-ant-`. En Ajustes eliges «Claude» y la pegas. Cada respuesta corta cuesta uno o dos centavos de
+dólar.
+
+Las claves se guardan solo en tu computador (`%LOCALAPPDATA%\Jarvis\ajustes.json`). Lo que hablas
+viaja por internet a Google o a Anthropic; las órdenes locales no.
 
 ### Recordatorios, alarmas y temporizadores (sin internet)
 
@@ -137,8 +143,8 @@ Las huellas de voz y cara son solo números guardados en tu portátil; nunca se 
 ### Buscar en internet (nuevo)
 
 «¿Qué clima hace en Bogotá?», «¿Va a llover mañana?», «Dame las noticias», «Noticias de fútbol»,
-«Busca en internet…», «¿Quién es…?». Con la clave de Claude, Jarvis busca en la web y te lo cuenta en
-voz. Sin la clave usa servicios gratis (Open-Meteo, Google Noticias y Wikipedia). Di «recuerda que vivo
+«Busca en internet…», «¿Quién es…?». Con Gemini o Claude, Jarvis busca y te lo cuenta en
+voz. Sin clave usa directamente servicios gratis (Open-Meteo, Google Noticias y Wikipedia). Di «recuerda que vivo
 en Bogotá» para que sepa tu ciudad.
 
 ### App del celular (nuevo)

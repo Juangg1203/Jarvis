@@ -242,3 +242,4 @@ body.vigilando .marco::before { content: "🛡️ Vigilando: si alguien usa el P
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition: none !important; }
 }
+.ajustes label[hidden] { display: none; }

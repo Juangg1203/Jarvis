@@ -15,6 +15,7 @@ import webview
 
 from jarvis import ajustes, config, recordatorios
 from jarvis.comandos import Cerebro, Respuesta
+from jarvis.gemini import ConversadorGemini, ErrorGemini
 from jarvis.ia import Conversador
 from jarvis.memoria import Memoria
 from jarvis.rutinas import Rutinas
@@ -33,7 +34,8 @@ class Jarvis:
         self.cerebro = Cerebro(agenda=self.agenda, memoria=Memoria(), rutinas=Rutinas())
         self._alarma_activa = None
         self.camara = gestos.Camara(al_gesto=self._gesto, al_estado=self._estado_camara)
-        self.conversador = Conversador(self.cerebro)
+        self._conversadores = {}
+        self.conversador = self._conversador()
         self.hablante = Hablante(self.ajustes["voz_motor"], self.ajustes["voz_edge"], al_nivel=self._nivel)
         self.dormido = False
         self._lock = threading.Lock()
@@ -185,13 +187,14 @@ class Jarvis:
                 self._decir(msg)
                 self._despues(self._al_terminar_de_hablar)
                 return
-            hay_claude = self.conversador.disponible()
+            self.conversador = self._conversador()
+            hay_claude = self.conversador.disponible()  # Gemini o Claude, según Ajustes
             r = self.cerebro.procesar(texto, solo_ordenes=hay_claude)
             if not r.entendida and hay_claude:
                 self._conversar(texto)
                 return
             if not r.entendida:
-                r.texto += " Si quieres conversar conmigo, añade tu clave de Claude en Ajustes."
+                r.texto += " Si quieres conversar conmigo, pon tu clave gratis de Gemini en Ajustes."
             self.dormido = r.dormir
             self._ui(estado="hablando", expresion=r.expresion, respuesta=r.texto,
                      resultados=[{"nombre": os.path.basename(p), "ruta": p} for p in r.resultados])
@@ -220,6 +223,8 @@ class Jarvis:
             )
             self._ui(respuesta_fin=True)
             self._avisos_cambiaron()
+        except ErrorGemini as e:
+            self._avisar(e.mensaje, e.cara)
         except anthropic.AuthenticationError:
             self._avisar("Mi clave de Claude no es válida. Revísala en Ajustes.", "triste")
         except anthropic.PermissionDeniedError:
@@ -235,6 +240,14 @@ class Jarvis:
             print(f"[jarvis] Error con Claude: {e}")
             self._avisar("Algo salió mal al pensar la respuesta.", "triste")
         self._despues(self._al_terminar_de_hablar)
+
+    def _conversador(self):
+        """El cerebro para conversar que elegiste en Ajustes: Gemini (gratis) o Claude."""
+        proveedor = "claude" if self.ajustes.get("proveedor") == "claude" else "gemini"
+        if proveedor not in self._conversadores:
+            clase = Conversador if proveedor == "claude" else ConversadorGemini
+            self._conversadores[proveedor] = clase(self.cerebro)
+        return self._conversadores[proveedor]
 
     def _avisar(self, texto, expresion):
         self._ui(estado="hablando", expresion=expresion, respuesta=texto)
@@ -629,6 +642,9 @@ class Api:
         j = self._j
         datos = {
             "tiene_clave": bool(clave),
+            "proveedor": a.get("proveedor", "gemini"),
+            "tiene_gemini": bool(ajustes.clave_gemini()),
+            "gemini_final": ajustes.clave_gemini()[-4:],
             "clave_final": clave[-4:] if clave else "",
             "voz_motor": a["voz_motor"],
             "modo_conversacion": a["modo_conversacion"],
@@ -650,8 +666,11 @@ class Api:
 
     def guardar_ajustes(self, cambios):
         cambios = dict(cambios or {})
-        if not cambios.get("anthropic_api_key"):
-            cambios.pop("anthropic_api_key", None)  # campo vacío = conservar la clave actual
+        for campo in ("anthropic_api_key", "gemini_api_key"):
+            if not str(cambios.get(campo) or "").strip():
+                cambios.pop(campo, None)  # campo vacío = conservar la clave actual
+            else:
+                cambios[campo] = str(cambios[campo]).strip()
         cambios.pop("codigo_celular", None)
         antes = ajustes.cargar()
         a = ajustes.guardar(cambios)

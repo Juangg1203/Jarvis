@@ -194,7 +194,7 @@ class Conversador:
     def olvidar(self, resumir=True):
         """Termina la conversación actual; en segundo plano guarda un resumen en la memoria."""
         viejo, self.historial = self.historial, []
-        if resumir and sum(1 for m in viejo if m["role"] == "user" and isinstance(m["content"], str)) >= 2:
+        if resumir and sum(1 for m in viejo if m["role"] == "user" and isinstance(m.get("content"), str)) >= 2:
             threading.Thread(target=self._resumir, args=(viejo,), daemon=True).start()
 
     @staticmethod

@@ -282,6 +282,12 @@
       ? "Clave guardada (termina en " + a.clave_final + "). Escribe otra solo si quieres cambiarla."
       : "Sin clave: Jarvis solo hace las órdenes del computador.";
     $("motor").value = a.voz_motor;
+    $("proveedor").value = a.proveedor || "gemini";
+    $("claveGemini").value = "";
+    $("geminiEstado").textContent = a.tiene_gemini
+      ? "Clave guardada (termina en " + a.gemini_final + "). Escribe otra solo si quieres cambiarla."
+      : "Sin clave: Jarvis solo hace las órdenes del computador.";
+    mostrarProveedor();
     $("conversacion").checked = !!a.modo_conversacion;
     $("gestosInicio").checked = !!a.gestos_al_iniciar;
     pintarSeguridad(a);
@@ -307,11 +313,18 @@
   $("celular").onchange = async () => pintarSeguridad(await api().guardar_ajustes({ celular: $("celular").checked }));
   $("btnCodigo").onclick = async () => pintarSeguridad(await api().nuevo_codigo_celular());
   $("tema").onchange = () => ponerTema($("tema").value);
+  function mostrarProveedor() {
+    const claude = $("proveedor").value === "claude";
+    $("campoClaude").hidden = !claude; $("campoGemini").hidden = claude;
+  }
+  $("proveedor").onchange = mostrarProveedor;
   $("btnAjustes").onclick = abrirAjustes;
   panel.addEventListener("click", (e) => { if (e.target === panel) panel.hidden = true; });
   $("btnGuardar").onclick = async () => {
     await api().guardar_ajustes({
       anthropic_api_key: $("clave").value.trim(),
+      gemini_api_key: $("claveGemini").value.trim(),
+      proveedor: $("proveedor").value,
       voz_motor: $("motor").value,
       modo_conversacion: $("conversacion").checked,
       gestos_al_iniciar: $("gestosInicio").checked,
@@ -382,7 +395,7 @@
     window.pywebview = { api: {
       enviar_texto: (t) => { jarvis.actualizar({ estado: "pensando", orden: t }); setTimeout(() => hablar("(Demo) Hola, soy Jarvis. Recibí: " + t, "guino"), 700); },
       escuchar: () => jarvis.actualizar({ estado: "escuchando" }), callar() {}, ocultar() {}, abrir_resultado() {},
-      leer_ajustes: async () => ({ tiene_clave: false, voz_motor: "piper", modo_conversacion: true, tema: document.body.dataset.tema,
+      leer_ajustes: async () => ({ tiene_clave: false, proveedor: "gemini", tiene_gemini: true, gemini_final: "x9Qk", voz_motor: "piper", modo_conversacion: true, tema: document.body.dataset.tema,
         conoce_voz: true, conoce_cara: false, solo_dueno: true, avisos_seguridad: true, celular: true, celular_activo: true,
         celular_direccion: "http://192.168.1.20:8765/",
         celular_qr: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 21 21"><path d="M1 1h7v7H1zM13 1h7v7h-7zM1 13h7v7H1zM10 3h2v2h-2zM10 9h3v2h-3zM15 11h2v3h-2zM10 14h2v5h-2zM14 16h5v2h-5z"/></svg>' }),

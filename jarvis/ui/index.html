@@ -78,7 +78,18 @@
   <aside class="ajustes" id="panelAjustes" hidden>
     <div class="ajustes-caja agenda">
       <h2>Ajustes</h2>
-      <label>Clave de Claude (para conversar)
+      <label>Cerebro para conversar
+        <select id="proveedor">
+          <option value="gemini">Gemini de Google (gratis)</option>
+          <option value="claude">Claude (de pago)</option>
+        </select>
+      </label>
+      <label id="campoGemini">Clave de Gemini
+        <input type="password" id="claveGemini" placeholder="AIza…" autocomplete="off">
+        <small id="geminiEstado"></small>
+        <small>¿No tienes? Entra a <b>aistudio.google.com</b> → «Get API key» → «Crear clave de API». Es gratis.</small>
+      </label>
+      <label id="campoClaude" hidden>Clave de Claude
         <input type="password" id="clave" placeholder="sk-ant-…" autocomplete="off">
         <small id="claveEstado">Sin clave: Jarvis solo hace las órdenes del computador.</small>
       </label>

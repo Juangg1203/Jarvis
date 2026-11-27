@@ -16,7 +16,11 @@ VARIANTES_ACTIVACION = {"jarvis", "yarvis", "jarbis", "yarbis", "harvis", "charv
 VOZ_PIPER = "es_MX-claude-high"
 CARPETA_VOCES = RAIZ / "modelos" / "voces"
 
-# Claude (conversación). Necesita internet y una clave de API de console.anthropic.com.
+# Gemini (conversación GRATIS): clave en aistudio.google.com. "gemini-flash-latest" es siempre el Flash más nuevo.
+MODELO_GEMINI = "gemini-flash-latest"
+MODELO_GEMINI_RESPALDO = "gemini-2.5-flash"
+
+# Claude (conversación, de pago). Necesita internet y una clave de API de console.anthropic.com.
 MODELO_CLAUDE = "claude-opus-5-5"
 ESFUERZO_CLAUDE = "low"      # low = responde más rápido; sube a "medium" si quieres respuestas más pensadas
 MAX_MENSAJES_HISTORIAL = 40  # al pasar de aquí, Jarvis empieza una conversación nueva
