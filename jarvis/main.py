@@ -57,6 +57,7 @@ class Jarvis:
         self._dictado = None        # {"tipo": "documento"|"correo", "titulo": str, "partes": [...]}
         self._deletreo = ""
         self.cerebro.manejadores_extra += [self._ordenes_seguridad, self._ordenes_dictado]
+        self.cerebro.escritor = self._escribir_documento
         self.oyente = Oyente(
             al_cambiar_estado=self._estado_voz,
             al_recibir_orden=self._orden_de_voz,
@@ -485,7 +486,62 @@ class Jarvis:
         return None
 
     # ---------- dictado de documentos y correos ----------
+    # ---------- documentos largos escritos por la IA, en segundo plano ----------
+    _RE_DOCUMENTO = re.compile(
+        r"^(?:(?:si|bueno|ok|dale|ahora)\s+)?(?:crea|creame|haz|hazme|escribe|escribeme|redacta|redactame|genera|"
+        r"generame|elabora|prepara|preparame)\s+(?:un |una |el |la |mi )?(?:nuevo |nueva )?(documento|resumen|ensayo|"
+        r"informe|tarea|trabajo|texto|articulo|reporte|exposicion|presentacion escrita)(?: nuevo| nueva)?\s+"
+        r"(sobre|acerca de|del|de|con|para)\s+(.+)$")
+
+    def _escribir_documento(self, pedido, titulo=""):
+        """Arranca la escritura de un documento con la IA y responde enseguida; avisa cuando está listo."""
+        conv = self._conversador()
+        if not conv.disponible():
+            return Respuesta("Para escribir documentos necesito un cerebro: elige Gemini u Ollama en Ajustes. "
+                             "También puedes decir «dicta un documento» y lo escribo como me lo digas.", "pensando")
+        tema = (pedido or titulo).strip().rstrip(".")
+
+        def escribir(c):
+            return c.escribir(f"Escribe un documento sobre: {tema}. Entre 350 y 600 palabras, salvo que se pida "
+                              f"otra extensión. Si es para estudiar, que sea claro y con ideas principales.")
+
+        def trabajo():
+            try:
+                try:
+                    texto = escribir(conv)
+                except ErrorGemini:
+                    otro = self._conversador("ollama")
+                    if self.ajustes.get("proveedor") != "auto" or conv is otro or not otro.disponible():
+                        raise
+                    texto = escribir(otro)
+                if not texto.strip():
+                    raise RuntimeError("la IA no devolvió texto")
+                t, cuerpo = redactar.separar_titulo(texto, titulo or tema[:60].capitalize())
+                ruta = redactar.crear_documento(t, cuerpo)
+                seguridad.registrar("documento", ruta)
+                self._ui(resultados=[{"nombre": os.path.basename(ruta), "ruta": ruta}])
+                self._anunciar(f"Tu documento «{t}» está listo. Lo guardé en Documentos, carpeta Jarvis, y te lo abrí.",
+                               "riendo")
+            except ErrorGemini as e:
+                self._anunciar("No pude escribir el documento. " + e.mensaje, e.cara)
+            except Exception as e:
+                print(f"[jarvis] Error escribiendo el documento: {e}")
+                self._anunciar("No pude escribir el documento. Inténtalo otra vez en un momento.", "triste")
+
+        threading.Thread(target=trabajo, daemon=True, name="escritor").start()
+        lento = isinstance(conv, ConversadorOllama)
+        return Respuesta(f"Listo, ya estoy escribiendo tu documento sobre {tema}. "
+                         + ("Sin internet tardo uno o dos minutos; " if lento else "")
+                         + "te aviso cuando esté y mientras tanto puedes pedirme otras cosas.", "guino")
+
     def _ordenes_dictado(self, original, t, solo_ordenes):
+        m = self._RE_DOCUMENTO.match(t)
+        if m:
+            # el tema tal como lo dijiste (con tildes), si se puede encontrar en el texto original
+            o = re.search(rf"(?i)\b{m.group(1)[:5]}\w*\b.*?\b{m.group(2)}\s+(.+)$", original)
+            tema = o.group(1) if o and len(o.group(1)) <= len(m.group(3)) + 4 else m.group(3)
+            pedido = tema if m.group(1) in ("documento", "texto", "trabajo") else f"{m.group(1)} {m.group(2)} {tema}"
+            return self._escribir_documento(pedido)
         if re.search(r"^(?:vamos a |quiero )?deletre(?:ar|a)\b|^modo deletre", t):
             self._deletreo = ""
             self.camara.modo = "letras"

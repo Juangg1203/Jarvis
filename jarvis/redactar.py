@@ -10,6 +10,10 @@ from . import config
 
 
 def carpeta_documentos():
+    from . import organizar
+    real = organizar.carpeta("documentos")  # la que usa Windows (también dentro de OneDrive)
+    if real:
+        return real / "Jarvis"
     for n in ("Documents", "Documentos"):
         for base in (config.HOME / "OneDrive", config.HOME):
             if (base / n).is_dir():
@@ -36,8 +40,20 @@ def crear_documento(titulo: str, texto: str, abrir=True) -> str:
     ruta = carpeta / f"{nombre_archivo(titulo)} {datetime.datetime.now():%Y-%m-%d %H%M}.docx"
     doc.save(ruta)
     if abrir and sys.platform == "win32":
-        os.startfile(str(ruta))
+        try:
+            os.startfile(str(ruta))
+        except OSError:  # sin Word instalado: muestra el archivo en su carpeta
+            import subprocess
+            subprocess.Popen(["explorer", "/select,", str(ruta)])
     return str(ruta)
+
+
+def separar_titulo(texto: str, respaldo: str = "Documento"):
+    """La primera línea corta del texto es el título; el resto, el cuerpo."""
+    lineas = [l.strip(" #*") for l in texto.strip().splitlines()]
+    if lineas and 0 < len(lineas[0]) <= 90 and len(lineas) > 1:
+        return lineas[0].rstrip(".:"), "\n".join(lineas[1:]).strip()
+    return respaldo, texto.strip()
 
 
 def borrador_correo(para="", asunto="", cuerpo="") -> str:

@@ -109,9 +109,23 @@ def descargar_caras():
             print(f"\nAviso: no se pudo descargar {nombre} ({e}).")
 
 
+def descargar_whisper():
+    """Oído preciso (Whisper). Opcional: si faster-whisper no está instalado, se usa solo Vosk."""
+    try:
+        from jarvis.oido import Transcriptor
+    except ImportError:
+        return
+    print(f"  Oído preciso (Whisper {config.MODELO_WHISPER})... puede tardar unos minutos la primera vez.")
+    if Transcriptor().cargar():
+        print("  Oído preciso listo.")
+    else:
+        print("  Aviso: sin oído preciso; Jarvis usará el oído normal.")
+
+
 if __name__ == "__main__":
     descargar_oido()
     descargar_voz()
     descargar_manos()
     descargar_reconocer_voz()
     descargar_caras()
+    descargar_whisper()

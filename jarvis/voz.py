@@ -1,4 +1,4 @@
-"""Voz 100 % local: escucha con Vosk (sin internet) y habla con la voz de Windows."""
+"""Voz 100 % local: oye con Vosk, entiende cada orden con Whisper (si está) y habla con Piper, Edge o Windows."""
 import json
 import queue
 import re
@@ -182,6 +182,7 @@ class Oyente:
         self.disponible = False
         self.reconoce_hablante = False
         self.error = ""
+        self.transcriptor = None  # oido.Transcriptor: Whisper para entender mejor cada orden
 
     def _entregar(self, texto, huella=None):
         # En otro hilo, para seguir oyendo (y poder interrumpir) mientras Jarvis piensa y habla.
@@ -194,6 +195,9 @@ class Oyente:
 
     def iniciar(self):
         threading.Thread(target=self._bucle, daemon=True, name="stt").start()
+        from .oido import Transcriptor
+        self.transcriptor = Transcriptor()
+        threading.Thread(target=self.transcriptor.cargar, daemon=True, name="whisper").start()
 
     def _quitar_activacion(self, texto: str):
         """Si el texto contiene la palabra de activación, devuelve lo que viene después ('' si nada)."""
@@ -203,8 +207,29 @@ class Oyente:
                 return " ".join(palabras[i + 1:])
         return None
 
+    def _texto_final(self, vosk_texto, audio, escuchando):
+        """Lo que se entrega: Whisper (más preciso) si está, si no lo que oyó Vosk. None si no era para Jarvis."""
+        resto_vosk = self._quitar_activacion(vosk_texto)
+        if not escuchando and resto_vosk is None:
+            return None  # hablabas con otra persona, no con Jarvis
+        if self.transcriptor and self.transcriptor.disponible and audio:
+            self.al_cambiar_estado("pensando")
+            preciso = self.transcriptor.transcribir(bytes(audio))
+            if preciso:
+                preciso = re.sub(r"\s+", " ", re.sub(r"(?<!\d)[.…](?!\d)", " ", preciso)).strip()
+                resto = self._quitar_activacion(preciso)
+                if resto is not None:
+                    return resto
+                if escuchando or resto_vosk is None:
+                    return normalizar(preciso)
+                # Vosk oyó «Jarvis» pero Whisper lo escribió distinto: quita las primeras palabras equivalentes
+                n = len(normalizar(vosk_texto).split()) - len(resto_vosk.split())
+                return " ".join(normalizar(preciso).split()[n:])
+        return resto_vosk if resto_vosk is not None else vosk_texto
+
     def _bucle(self):
         try:
+            import numpy as np
             import sounddevice as sd
             from vosk import KaldiRecognizer, Model, SetLogLevel
         except ImportError as e:
@@ -233,7 +258,8 @@ class Oyente:
             audio.put(bytes(datos))
 
         try:
-            stream = sd.RawInputStream(samplerate=16000, blocksize=8000, dtype="int16", channels=1, callback=callback)
+            # bloques de 0,1 s: así se nota enseguida cuando dejas de hablar
+            stream = sd.RawInputStream(samplerate=16000, blocksize=1600, dtype="int16", channels=1, callback=callback)
             stream.start()
         except Exception as e:
             self.error = f"No pude abrir el micrófono: {e}"
@@ -242,13 +268,24 @@ class Oyente:
 
         self.disponible = True
         activo_hasta = 0.0
+        frase = bytearray()            # audio desde que empezó la frase actual (para Whisper)
+        ruido = 200.0                   # nivel del ruido de fondo, se ajusta solo
+        hablo, ultimo_sonido, inicio = False, 0.0, 0.0
+        maximo = 16000 * 2 * config.MAX_ORDEN_SEG
         self.al_cambiar_estado("esperando")
+
+        def empezar_a_escuchar():
+            nonlocal activo_hasta, hablo, inicio
+            activo_hasta = time.monotonic() + config.ESPERA_ORDEN_SEG
+            hablo, inicio = False, time.monotonic()
+            self.al_cambiar_estado("escuchando")
+
         while True:
             if self._escuchar_ya.is_set():
                 self._escuchar_ya.clear()
                 rec.Reset()
-                activo_hasta = time.monotonic() + config.ESPERA_ORDEN_SEG
-                self.al_cambiar_estado("escuchando")
+                frase.clear()
+                empezar_a_escuchar()
 
             try:
                 bloque = audio.get(timeout=0.5)
@@ -257,39 +294,62 @@ class Oyente:
 
             if self.esta_hablando():
                 rec.Reset()
+                frase.clear()
                 continue
 
-            escuchando = time.monotonic() < activo_hasta
+            ahora = time.monotonic()
+            escuchando = ahora < activo_hasta
             if activo_hasta and not escuchando:
                 activo_hasta = 0.0
                 self.al_cambiar_estado("esperando")
             if bloque is None:
                 continue
 
-            if rec.AcceptWaveform(bloque):
-                resultado = json.loads(rec.Result())
+            # ¿Hay voz en este pedacito? Se compara con el ruido de fondo medido.
+            nivel = float(np.sqrt(np.mean(np.frombuffer(bloque, dtype=np.int16).astype(np.float32) ** 2)))
+            if nivel < ruido * 1.6:
+                ruido = 0.97 * ruido + 0.03 * max(nivel, 50.0)
+            hay_voz = nivel > max(config.NIVEL_VOZ_MIN, ruido * 2.5)
+            frase += bloque
+            if len(frase) > maximo:
+                del frase[:len(frase) - maximo]
+
+            fin = False
+            if escuchando:
+                if hay_voz:
+                    hablo, ultimo_sonido = True, ahora
+                    activo_hasta = max(activo_hasta, ahora + 3)  # no te corta mientras sigues hablando
+                fin = hablo and (ahora - ultimo_sonido > config.SILENCIO_FIN_SEG or ahora - inicio > config.MAX_ORDEN_SEG)
+
+            if rec.AcceptWaveform(bloque) or fin:
+                resultado = json.loads(rec.Result() if not fin else rec.FinalResult())
+                if fin:
+                    rec.Reset()
                 texto = resultado.get("text", "").strip()
+                audio_frase, frase = frase, bytearray()
                 if not texto:
+                    hablo = False
                     continue
                 huella = (resultado["spk"], resultado.get("spk_frames", 0)) if resultado.get("spk") else None
-                resto = self._quitar_activacion(texto)
-                if escuchando:
-                    if resto == "":  # solo dijiste "Jarvis": sigo esperando la orden
-                        activo_hasta = time.monotonic() + config.ESPERA_ORDEN_SEG
-                        continue
-                    activo_hasta = 0.0
-                    self._entregar(resto if resto is not None else texto, huella)
-                elif resto is not None:
-                    if resto:
-                        self._entregar(resto, huella)
-                    else:
-                        activo_hasta = time.monotonic() + config.ESPERA_ORDEN_SEG
-                        self.al_cambiar_estado("escuchando")
+                if escuchando and self._quitar_activacion(texto) == "":  # solo dijiste "Jarvis": sigo esperando
+                    empezar_a_escuchar()
+                    continue
+                if not escuchando and self._quitar_activacion(texto) == "":
+                    empezar_a_escuchar()
+                    continue
+                orden = self._texto_final(texto, audio_frase, escuchando)
+                if orden is None:
+                    continue
+                activo_hasta, hablo = 0.0, False
+                if orden.strip():
+                    self._entregar(orden, huella)
+                else:
+                    self.al_cambiar_estado("esperando")
             else:
                 parcial = json.loads(rec.PartialResult()).get("partial", "")
                 if escuchando and parcial:
                     self.al_oir_parcial(parcial)
                 elif not escuchando and re.search(r"\b(" + "|".join(config.VARIANTES_ACTIVACION) + r")\b", parcial):
                     # Reacciona en cuanto oye su nombre, sin esperar a que termines la frase.
-                    activo_hasta = time.monotonic() + config.ESPERA_ORDEN_SEG
-                    self.al_cambiar_estado("escuchando")
+                    empezar_a_escuchar()
+                    hablo, ultimo_sonido = True, ahora

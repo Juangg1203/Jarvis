@@ -222,6 +222,16 @@ class ConversadorGemini(Conversador):
                 return Respuesta("No pude conectarme a internet para buscar eso.")
         return super()._ejecutar(nombre, entrada)
 
+    def escribir(self, instruccion: str) -> str:
+        from .ia import Conversador
+        cuerpo = {"systemInstruction": {"parts": [{"text": Conversador.ESCRITOR}]},
+                  "contents": [{"role": "user", "parts": [{"text": instruccion}]}],
+                  "generationConfig": {"maxOutputTokens": 4096, "temperature": 0.7}}
+        with self._peticion("generateContent", cuerpo) as r:
+            datos = json.loads(r.read().decode("utf-8"))
+        partes = datos["candidates"][0]["content"]["parts"]
+        return "".join(p.get("text", "") for p in partes if not p.get("thought")).strip()
+
     # ---------- memoria ----------
     @staticmethod
     def _transcripcion(historial):

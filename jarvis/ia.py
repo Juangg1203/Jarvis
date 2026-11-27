@@ -292,6 +292,19 @@ class Conversador:
         except Exception as e:
             print(f"[memoria] No se pudo resumir: {e}")
 
+    ESCRITOR = ("Eres un redactor en español latino. Escribe el texto pedido completo y bien organizado: un título "
+                "corto en la primera línea y luego párrafos separados por una línea en blanco (puedes usar subtítulos "
+                "cortos en su propia línea). Sin markdown, sin asteriscos ni almohadillas, sin comentarios antes o "
+                "después: solo el texto.")
+
+    def escribir(self, instruccion: str) -> str:
+        """Redacta un texto largo (documento, resumen, tarea...) sin herramientas ni voz."""
+        r = self._cliente_api().beta.messages.create(
+            model=config.MODELO_CLAUDE, max_tokens=4000, system=self.ESCRITOR,
+            messages=[{"role": "user", "content": instruccion}], output_config={"effort": "low"},
+            betas=["server-side-fallback-2026-07-01"], fallbacks="default")
+        return "".join(b.text for b in r.content if b.type == "text").strip()
+
     def _cliente_api(self):
         clave = ajustes.clave_claude()
         if self._cliente is None or clave != self._clave:
@@ -397,7 +410,12 @@ class Conversador:
             r = c.preparar_orden(str(entrada.get("carpeta", "descargas")), str(entrada.get("modo") or "tipo"))
             return Respuesta(r.texto + (" (Pendiente: el usuario debe decir sí.)" if c.pendiente_accion else ""))
         if nombre == "redactar_documento":
-            return c.documento(str(entrada.get("titulo", "")), str(entrada.get("texto", "")))
+            titulo = str(entrada.get("titulo") or entrada.get("tema") or "").strip()
+            texto = str(entrada.get("texto") or entrada.get("contenido") or "").strip()
+            if len(texto) < 300 and c.escritor:
+                # La IA solo dio el tema: el texto completo se escribe aparte, sin hacerte esperar.
+                return c.escritor(texto or titulo, titulo)
+            return c.documento(titulo, texto)
         if nombre == "redactar_correo":
             return c.correo(str(entrada.get("para", "")), str(entrada.get("asunto", "")), str(entrada.get("cuerpo", "")))
         if nombre == "ver_pantalla":

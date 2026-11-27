@@ -10,8 +10,8 @@ pip install -r requirements.txt || (echo Hubo un error instalando las librerias.
 echo Instalando la camara: gestos, tu cara y vigilancia (opcional)...
 pip install "opencv-python>=4.9" || echo Aviso: no se pudo instalar la camara.
 pip install -r requirements-gestos.txt || echo Aviso: no se pudieron instalar los gestos. Jarvis funciona igual sin ellos.
-echo Instalando el lector de notificaciones (opcional)...
-pip install -r requirements-extra.txt || echo Aviso: no se pudo instalar el lector de notificaciones.
+echo Instalando el oido preciso y el lector de notificaciones (opcional)...
+pip install -r requirements-extra.txt || echo Aviso: no se pudieron instalar los extras. Jarvis funciona igual.
 python scripts\descargar_modelo.py || (echo No se pudo descargar los modelos de voz. & pause & exit /b 1)
 echo.
 echo Listo. Ahora abre iniciar.bat para encender a Jarvis.

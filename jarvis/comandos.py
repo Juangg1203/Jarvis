@@ -59,6 +59,7 @@ class Cerebro:
         self.memoria = memoria if memoria is not None else Memoria()
         self.rutinas = rutinas if rutinas is not None else Rutinas()
         self.manejadores_extra = []  # main.py añade aquí las órdenes de seguridad y del celular
+        self.escritor = None  # main.py: fn(pedido, titulo) -> Respuesta; escribe documentos largos en segundo plano
 
     # ---------- punto de entrada ----------
     def procesar(self, texto: str, solo_ordenes: bool = False) -> Respuesta:

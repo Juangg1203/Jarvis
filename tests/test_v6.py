@@ -214,3 +214,33 @@ def test_en_linea_se_guarda_un_rato(monkeypatch):
     monkeypatch.setattr(internet, "_en_linea", (0.0, True))
     internet._en_linea = (-1e9, True)
     assert internet.en_linea() is False and internet.en_linea() is False and len(llamadas) == 1
+
+
+def test_documentos_largos_van_al_escritor():
+    from jarvis.ia import Conversador
+    c = Cerebro()
+    pedidos = []
+    c.escritor = lambda pedido, titulo="": pedidos.append((pedido, titulo)) or __import__(
+        "jarvis.comandos", fromlist=["Respuesta"]).Respuesta("escribiendo")
+    conv = Conversador(c)
+    r = conv._ejecutar("redactar_documento", {"titulo": "El cambio climático", "texto": ""})
+    assert r.texto == "escribiendo" and pedidos == [("El cambio climático", "El cambio climático")]
+    assert redactar.separar_titulo("El clima\n\nPárrafo uno.\nPárrafo dos.") == ("El clima", "Párrafo uno.\nPárrafo dos.")
+    assert redactar.separar_titulo("Solo un párrafo.", "Tema")[0] == "Tema"
+
+
+def test_ollama_escribe_sin_herramientas(monkeypatch):
+    c = ollama.ConversadorOllama(Cerebro())
+    enviados = []
+
+    class R(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    monkeypatch.setattr(c, "_chat", lambda cuerpo: enviados.append(cuerpo) or R(
+        json.dumps({"message": {"content": "Título\n\nTexto."}}).encode()))
+    assert c.escribir("Escribe sobre el clima") == "Título\n\nTexto."
+    assert "tools" not in enviados[0] and enviados[0]["options"]["num_predict"] >= 800

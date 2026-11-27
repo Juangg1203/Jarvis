@@ -50,6 +50,15 @@ CARPETA_MODELO = RAIZ / "modelos" / "vosk-model-small-es-0.42"
 
 # Segundos que Jarvis espera una orden después de oír su nombre.
 ESPERA_ORDEN_SEG = 8
+# Cuándo das por terminada la orden: este silencio después de hablar (súbelo si te corta a mitad de frase).
+SILENCIO_FIN_SEG = 1.0
+MAX_ORDEN_SEG = 20          # una orden nunca se escucha más de esto
+NIVEL_VOZ_MIN = 350         # volumen mínimo que cuenta como voz (el ruido de fondo se mide solo)
+
+# Oído preciso (Whisper, sin internet): vuelve a escuchar cada orden y la entiende mucho mejor que Vosk.
+# "base" es rápido; "small" entiende mejor pero tarda un poco más en portátiles sin tarjeta gráfica.
+MODELO_WHISPER = "small"
+CARPETA_WHISPER = RAIZ / "modelos" / "whisper"
 
 # Carpetas donde Jarvis busca archivos.
 CARPETAS_BUSQUEDA = [

@@ -207,6 +207,17 @@ funciona también sin internet, y «olvida todo» borra la memoria (pide confirm
 Las imágenes están en `jarvis/ui/assets/expresiones/`. Si quieres cambiar alguna, reemplaza el PNG
 con el mismo nombre.
 
+## Oído preciso y documentos largos (v6.3)
+
+- **Oído preciso (Whisper, sin internet):** Vosk sigue oyendo «Jarvis» al instante, pero cada orden la vuelve a
+  escuchar Whisper, que entiende mucho mejor. Se instala solo con `instalar.bat` (unos 500 MB). Si tarda en tu
+  portátil, en `jarvis/config.py` cambia `MODELO_WHISPER = "small"` por `"base"`.
+- **Deja de escuchar cuando terminas de hablar:** mide el ruido de tu cuarto y corta tras 1 segundo de silencio
+  (`SILENCIO_FIN_SEG` en `config.py`). Si te corta a mitad de frase, súbelo a 1.5.
+- **Documentos largos sin esperar:** «crea un documento sobre el cambio climático» o «hazme un resumen de la
+  Revolución Francesa». Jarvis te dice que ya está escribiendo, puedes seguir pidiéndole cosas, y te avisa cuando
+  el Word esté listo en Documentos\Jarvis.
+
 ## Novedades de la versión 6
 
 | Dile… | Qué hace |

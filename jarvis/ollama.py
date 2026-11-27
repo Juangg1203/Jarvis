@@ -143,6 +143,15 @@ class ConversadorOllama(ConversadorGemini):
                 print(f"[ollama] No pude precalentar: {e}")
         threading.Thread(target=trabajo, daemon=True, name="ollama-precalentar").start()
 
+    def escribir(self, instruccion: str) -> str:
+        from .ia import Conversador
+        cuerpo = {"model": modelo(), "stream": False, "keep_alive": MANTENER,
+                  "options": {"num_ctx": 4096, "num_predict": 900, "temperature": 0.7},
+                  "messages": [{"role": "system", "content": Conversador.ESCRITOR},
+                               {"role": "user", "content": instruccion}]}
+        with self._chat(cuerpo) as r:
+            return json.loads(r.read().decode("utf-8")).get("message", {}).get("content", "").strip()
+
     def _ronda(self, cliente, al_texto, al_frase, al_expresion, previo):
         sistema = self._sistema(self._contexto)
         cuerpo = {"model": modelo(), "stream": True, "tools": herramientas(),
