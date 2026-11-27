@@ -143,6 +143,12 @@ class Cerebro:
         pregunta = re.match(r"^(?:que|quien|quienes|cual|cuales|cuando|donde|cuanto|cuanta|cuantos|como)\s+(?:es|son|fue|fueron|era|mide|pesa|vive|nacio|murio|invento|descubrio|gano|queda|esta)\s+(.+)", t)
         if not (clima or noticias or web or pregunta):
             return None
+        from . import ajustes
+        if ajustes.solo_local():
+            if pregunta and not (clima or noticias or web):
+                return None  # la responde Ollama con lo que sabe
+            return Respuesta("Estoy en modo solo local, así que no busco en internet. "
+                             "Si quieres, cámbialo en Ajustes.", "normal")
         if solo_ordenes:
             return Respuesta("", "pensando", entendida=False)  # Claude busca y responde mejor
         if pregunta and not (clima or noticias or web) and re.search(r"\b(hora|dia|fecha|bateria|wifi|volumen|brillo)\b", t):

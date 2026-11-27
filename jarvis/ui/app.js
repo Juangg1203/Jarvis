@@ -559,7 +559,7 @@
       ? "Clave guardada (termina en " + a.clave_final + "). Escribe otra solo si quieres cambiarla."
       : "Sin clave: Jarvis solo hace las órdenes del computador.";
     $("motor").value = a.voz_motor;
-    $("proveedor").value = a.proveedor || "gemini";
+    $("proveedor").value = a.proveedor || "local";
     $("ollamaModelo").value = a.ollama_modelo || "qwen2.5:3b";
     $("claveGemini").value = "";
     $("geminiEstado").textContent = a.tiene_gemini
@@ -594,8 +594,8 @@
   async function mostrarProveedor() {
     const p = $("proveedor").value;
     $("campoClaude").hidden = p !== "claude"; $("campoGemini").hidden = p !== "gemini" && p !== "auto";
-    $("campoOllama").hidden = p !== "ollama" && p !== "auto";
-    if ((p !== "ollama" && p !== "auto") || !api() || !api().estado_ollama) return;
+    $("campoOllama").hidden = p !== "ollama" && p !== "auto" && p !== "local";
+    if ((p !== "ollama" && p !== "auto" && p !== "local") || !api() || !api().estado_ollama) return;
     $("ollamaEstado").textContent = "Revisando Ollama…";
     const o = await api().estado_ollama();
     const rapido = $("ollamaModelo").value === (o.modelo_rapido || "qwen2.5:1.5b");

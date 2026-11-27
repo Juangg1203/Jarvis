@@ -9,7 +9,7 @@ def _ARCHIVO():
 
 
 POR_DEFECTO = {
-    "proveedor": "gemini",      # quién conversa: auto (Gemini con internet, Ollama sin él) | gemini | ollama | claude
+    "proveedor": "local",       # quién conversa: local (todo en el portátil, sin internet) | auto (Gemini con internet, Ollama sin él) | gemini | ollama | claude
     "ollama_modelo": "",        # vacío = config.MODELO_OLLAMA
     "oido": "",                 # vacío = config.MODELO_WHISPER ("base" más rápido, "small" más preciso)
     "gemini_api_key": "",
@@ -44,6 +44,11 @@ def guardar(cambios: dict) -> dict:
     config.CARPETA_DATOS.mkdir(parents=True, exist_ok=True)
     _ARCHIVO().write_text(json.dumps(datos, indent=2, ensure_ascii=False), encoding="utf-8")
     return datos
+
+
+def solo_local() -> bool:
+    """Modo «Solo local»: Jarvis no usa internet para nada (cerebro Ollama, voz Piper, sin búsquedas)."""
+    return cargar().get("proveedor") == "local"
 
 
 def clave_gemini() -> str:

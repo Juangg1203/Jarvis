@@ -22,13 +22,13 @@ MANTENER = "60m"  # el modelo se queda en memoria una hora: así no tarda en "de
 # (abrir, buscar, ordenar, volumen...) ya las entiende Jarvis por su cuenta antes de preguntarle a la IA.
 HERRAMIENTAS_OLLAMA = {"abrir", "crear_recordatorio", "recordar_dato", "reproducir_musica", "redactar_documento"}
 
-SISTEMA_OLLAMA = f"""Eres Jarvis, el asistente personal de {config.NOMBRE_USUARIO}, un mono holográfico azul que vive en su \
+SISTEMA_OLLAMA = f"""Eres Jarvis, el asistente personal de {config.NOMBRE_USUARIO}, un orbe holográfico azul que vive en su \
 portátil. Hablas español latino, cálido y con algo de humor. Lo que escribes se lee en voz alta: responde en una a \
 tres frases cortas, sin markdown, listas, emojis ni enlaces. Empieza siempre con una emoción entre corchetes: \
 [normal] [riendo] [guino] [sorprendido] [pensando] [preocupado] [triste]. Ejemplo: "[riendo] ¡Claro!"
 El texto viene de un reconocedor de voz y puede tener errores: entiende la intención más probable.
-Usa las herramientas solo cuando haga falta (buscar_internet para clima, noticias o datos actuales; \
-recordar_dato si te cuenta algo personal que valga la pena guardar). Para charlar, responde directo. \
+Usa las herramientas solo cuando haga falta (recordar_dato si te cuenta algo personal que valga la pena \
+guardar). Para charlar, responde directo. \
 Nunca envíes mensajes ni correos: solo los dejas listos."""
 
 
@@ -61,7 +61,8 @@ class ErrorOllama(ErrorGemini):
 
 def herramientas():
     salida = []
-    for h in HERRAMIENTAS + [BUSCAR_INTERNET]:
+    extra = [] if ajustes.solo_local() else [BUSCAR_INTERNET]
+    for h in HERRAMIENTAS + extra:
         if h.get("name") not in HERRAMIENTAS_OLLAMA | {"buscar_internet"} or "input_schema" not in h:
             continue
         esquema = {k: v for k, v in h["input_schema"].items() if k != "additionalProperties"}
@@ -151,7 +152,8 @@ class ConversadorOllama(ConversadorGemini):
                 threading.Thread(target=despues, daemon=True, name="ollama-resumen").start()
 
     def _sistema(self, contexto):
-        return SISTEMA_OLLAMA + ("\n\n" + contexto if contexto else "")
+        extra = "" if ajustes.solo_local() else " Para clima, noticias o datos actuales usa buscar_internet."
+        return SISTEMA_OLLAMA + extra + ("\n\n" + contexto if contexto else "")
 
     def precalentar(self):
         """Carga el modelo y deja leído el mensaje del sistema, para que la primera pregunta no espere.

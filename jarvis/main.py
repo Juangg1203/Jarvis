@@ -38,7 +38,8 @@ class Jarvis:
         self.camara = gestos.Camara(al_gesto=self._gesto, al_estado=self._estado_camara)
         self._conversadores = {}
         self.conversador = self._conversador()
-        self.hablante = Hablante(self.ajustes["voz_motor"], self.ajustes["voz_edge"], al_nivel=self._nivel)
+        self.hablante = Hablante("piper" if ajustes.solo_local() and self.ajustes["voz_motor"] == "edge"
+                                 else self.ajustes["voz_motor"], self.ajustes["voz_edge"], al_nivel=self._nivel)
         self.dormido = False
         self._lock = threading.Lock()
         self._ultimo_nivel = 0.0
@@ -265,6 +266,8 @@ class Jarvis:
 
         «auto»: Gemini cuando hay internet y clave (rápido y gratis); Ollama cuando no hay internet."""
         proveedor = proveedor or self.ajustes.get("proveedor")
+        if proveedor == "local":
+            proveedor = "ollama"
         if proveedor == "auto":
             proveedor = "gemini" if ajustes.clave_gemini() and internet.en_linea() else "ollama"
             if proveedor == "ollama" and not self._conversador("ollama").disponible():
@@ -279,7 +282,7 @@ class Jarvis:
         """Si Ollama va a responder, lo carga en memoria ya, para que la primera respuesta no tarde.
         En «auto» con internet responde Gemini: entonces Ollama se saca de la memoria (unos 2 GB)."""
         proveedor = self.ajustes.get("proveedor")
-        if proveedor not in ("ollama", "auto"):
+        if proveedor not in ("ollama", "auto", "local"):
             return
 
         def trabajo():
@@ -779,7 +782,7 @@ class Api:
         from jarvis import equipo
         j = self._j
         proveedor = j.ajustes.get("proveedor", "gemini")
-        nombres = {"gemini": "Gemini", "ollama": "Ollama (sin internet)", "claude": "Claude",
+        nombres = {"gemini": "Gemini", "ollama": "Ollama (sin internet)", "claude": "Claude", "local": "Solo local",
                    "auto": "Automático"}
         try:
             return equipo.estado(internet.en_linea(cache=60), nombres.get(proveedor, proveedor))

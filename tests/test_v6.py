@@ -265,3 +265,16 @@ def test_poca_ram_usa_modelos_ligeros(monkeypatch):
     ollama._LIGERO.clear()
     assert ollama.modelo() == "qwen2.5:1.5b"
     ollama._LIGERO.clear()
+
+
+def test_modo_solo_local_no_usa_internet():
+    from jarvis import ajustes
+    from jarvis.comandos import Cerebro
+    ajustes.guardar({"proveedor": "local"})
+    try:
+        assert ajustes.solo_local()
+        assert "buscar_internet" not in [h["function"]["name"] for h in ollama.herramientas()]
+        r = Cerebro().procesar("dime las noticias")
+        assert "solo local" in r.texto
+    finally:
+        ajustes.guardar({"proveedor": "auto"})
