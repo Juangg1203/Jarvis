@@ -138,7 +138,28 @@ body[data-estado="escuchando"] .pista { color: var(--neon2); }
 .botones button { background: transparent; color: var(--texto); border: 1px solid var(--neon-suave); border-radius: 8px; padding: 7px 12px; cursor: pointer; }
 .botones .primario { background: var(--neon); color: #021022; border-color: var(--neon); font-weight: 600; }
 
+/* ---------- agenda ---------- */
+.agenda-btn { position: relative; }
+.insignia { position: absolute; top: -6px; right: -6px; min-width: 15px; height: 15px; padding: 0 3px; border-radius: 8px;
+  background: var(--neon); color: #021022; font-size: 10px; font-weight: 700; line-height: 15px; text-align: center; box-shadow: 0 0 8px var(--neon); }
+.insignia[hidden] { display: none; }
+body.alerta .agenda-btn { animation: sacudir .6s ease-in-out 3; border-color: var(--neon); }
+.agenda { max-height: calc(100vh - 40px); overflow-y: auto; }
+.agenda section { display: flex; flex-direction: column; gap: 6px; }
+.agenda h3 { margin: 0; font-size: 12px; letter-spacing: 1px; color: var(--neon2); text-transform: uppercase; }
+.lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.lista:empty::before { content: "Nada por ahora."; color: var(--tenue); font-size: 12.5px; }
+.lista li { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid rgba(31,163,255,.3); border-radius: 8px; font-size: 13px; background: rgba(3,12,28,.7); }
+.lista li span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.lista li em { color: var(--neon2); font-style: normal; white-space: nowrap; font-size: 12px; }
+.lista li button { background: none; border: none; color: var(--tenue); cursor: pointer; font-size: 14px; padding: 0 2px; }
+.lista li button:hover { color: var(--alerta); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chips button { background: rgba(31,163,255,.1); color: var(--texto); border: 1px solid var(--neon-suave); border-radius: 16px; padding: 5px 12px; cursor: pointer; font-size: 13px; }
+.chips button:hover { border-color: var(--neon); background: rgba(31,163,255,.22); }
+
 /* ---------- animaciones ---------- */
+@keyframes sacudir { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-14deg); } 75% { transform: rotate(14deg); } }
 @keyframes flotar { 0%, 100% { margin-top: 0; } 50% { margin-top: -7px; } }
 @keyframes respirar { 0%, 100% { opacity: .85; } 50% { opacity: 1; } }
 @keyframes latido { 50% { opacity: .3; } }

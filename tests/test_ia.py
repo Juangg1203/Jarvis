@@ -89,3 +89,36 @@ def test_error_reinicia_historial(monkeypatch, tmp_path):
     except IndexError:
         pass
     assert c.historial == []
+
+
+def test_herramientas_de_agenda_y_memoria(monkeypatch, tmp_path):
+    import datetime as dt
+    futuro = (dt.datetime.now() + dt.timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M")
+    usos = [NS(type="tool_use", id="a", name="crear_recordatorio", input={"fecha_hora": futuro, "mensaje": "llamar a Ana"}),
+            NS(type="tool_use", id="b", name="recordar_dato", input={"dato": "Su hermana se llama Ana"})]
+    r1 = FakeStream([], NS(content=usos, stop_reason="tool_use"))
+    r2 = FakeStream(["[guino] Listo."], NS(content=[], stop_reason="end_turn"))
+    c, cli = _conv(monkeypatch, tmp_path, [r1, r2])
+    c.responder("recuérdame en una hora llamar a mi hermana Ana", lambda t: None, lambda f: None, lambda e: None, lambda r: None)
+    assert c.cerebro.agenda.pendientes()[0]["mensaje"] == "llamar a Ana"
+    assert c.cerebro.memoria.datos[0]["texto"] == "Su hermana se llama Ana"
+    assert len(c.historial[2]["content"]) == 2          # ambos resultados en un solo mensaje
+
+
+def test_memoria_entra_en_el_contexto(monkeypatch, tmp_path):
+    final = NS(content=[NS(type="text", text="ok")], stop_reason="end_turn")
+    c, cli = _conv(monkeypatch, tmp_path, [FakeStream(["[normal] Hola."], final)])
+    c.cerebro.memoria.recordar("Le gusta el fútbol")
+    c.responder("hola", lambda t: None, lambda f: None, lambda e: None, lambda r: None)
+    sistema = cli.llamadas[0]["system"]
+    assert len(sistema) == 2 and "fútbol" in sistema[1]["text"]
+
+
+def test_resumen_al_terminar(monkeypatch, tmp_path):
+    final = NS(content=[NS(type="text", text="[riendo] Bien.")], stop_reason="end_turn")
+    c, cli = _conv(monkeypatch, tmp_path, [FakeStream(["[riendo] Bien."], final), FakeStream(["[normal] Claro."], final)])
+    for t in ("hola", "cómo estás"):
+        c.responder(t, lambda t: None, lambda f: None, lambda e: None, lambda r: None)
+    cli.beta.messages.create = lambda **kw: NS(stop_reason="end_turn", content=[NS(type="text", text="Charlaron un rato.")])
+    c._resumir(c.historial)
+    assert c.cerebro.memoria.resumenes[-1]["resumen"] == "Charlaron un rato."

@@ -7,7 +7,7 @@ mueve con su voz y cambia de expresión según lo que está haciendo.
 Las órdenes del computador funcionan **sin internet**. Si añades una clave de Claude, además
 puede **conversar contigo** de cualquier tema y entender órdenes dichas con tus propias palabras.
 
-![Captura](docs/captura.png)
+![Captura](docs/captura.png) ![Agenda](docs/agenda.png)
 
 ## Qué hace (versión 1)
 
@@ -50,6 +50,45 @@ Cómo activarlo:
 La clave se guarda solo en tu computador (`%LOCALAPPDATA%\Jarvis\ajustes.json`).
 Lo que hablas con Claude viaja por internet a Anthropic; las órdenes locales no.
 Si no hay internet o se acaba el saldo, Jarvis te lo dice y sigue haciendo las órdenes locales.
+
+### Recordatorios, alarmas y temporizadores (sin internet)
+
+| Dices… | Jarvis… |
+|---|---|
+| «Avísame en 20 minutos que saque la ropa» | Te lo recuerda en 20 minutos, en voz alta |
+| «Recuérdame mañana a las 8 llamar a mamá» | Te lo dice mañana a las 8:00 |
+| «Pon una alarma a las 6 y media» | Suena a las 6:30 (y se repite si no le haces caso) |
+| «Pon un temporizador de 5 minutos» | Te avisa cuando acabe |
+| «¿Qué recordatorios tengo?» | Te los lee numerados |
+| «Cancela el recordatorio dos» / «cancela todos los recordatorios» | Los quita |
+
+Se guardan en el disco: si apagas el portátil, al volver a encenderlo Jarvis te dice los que
+vencieron mientras estaba apagado. La campana 🔔 de arriba muestra cuántos hay y te deja quitarlos.
+
+### Rutinas (sin internet)
+
+| Dices… | Jarvis… |
+|---|---|
+| «Modo estudio» | Abre Word, Chrome y Spotify, silencia las notificaciones y te avisa en 25 minutos para descansar |
+| «Termina el modo estudio» / «modo normal» | Vuelve a activar las notificaciones |
+| «Buenos días» | Te dice el día, la hora y tus recordatorios de hoy |
+| «¿Qué rutinas tengo?» | Te las dice |
+
+Con Claude puedes crear rutinas nuevas hablando: «crea un modo juego que abra Steam y Discord y
+me avise en una hora». También puedes editarlas a mano en `%LOCALAPPDATA%\Jarvis\rutinas.json`.
+
+### Memoria
+
+| Dices… | Jarvis… |
+|---|---|
+| «Recuerda que mi equipo favorito es el Nacional» | Lo guarda para siempre |
+| «¿Qué sabes de mí?» | Te dice lo que tiene anotado |
+| «Olvida que…» | Lo borra |
+
+Con Claude, además, guarda solo lo importante que le cuentas, hace un resumen de cada conversación
+para acordarse la próxima vez, y puede buscar en lo que hablaron otros días («¿qué te dije la
+semana pasada de mi examen?»). Todo se guarda solo en tu portátil, en `%LOCALAPPDATA%\Jarvis\`.
+En la campana 🔔 ves lo que recuerda y puedes borrar cada dato.
 
 ### Expresiones del avatar
 
@@ -122,6 +161,9 @@ jarvis/
   comandos.py    órdenes locales: entiende la orden y la ejecuta
   ia.py          conversación con Claude en streaming, con las órdenes como herramientas
   ajustes.py     clave y preferencias guardadas en tu computador
+  recordatorios.py  recordatorios, alarmas y temporizadores (entiende la hora en español)
+  rutinas.py     rutinas como «modo estudio»
+  memoria.py     datos que recuerda de ti y resúmenes de conversaciones
   archivos.py    buscar / abrir / mandar a la papelera, apps del menú Inicio
   seguridad.py   rutas protegidas, registro, Windows Defender, bloquear equipo
   ui/            interfaz con tu diseño (HTML + CSS + JS)
@@ -131,6 +173,6 @@ tests/           pruebas automáticas (python -m pytest)
 ## Próximos pasos
 
 - Lenguaje de señas con la cámara (MediaPipe, también offline).
-- Más órdenes: cerrar programas, mover y copiar archivos, controlar volumen, recordatorios.
+- Más órdenes: cerrar programas, mover y copiar archivos, controlar el volumen.
 - Un oído más preciso (Whisper local) para que entienda mejor frases largas.
 - Reconocimiento de tu voz para que solo te obedezca a ti.

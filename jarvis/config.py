@@ -20,6 +20,7 @@ CARPETA_VOCES = RAIZ / "modelos" / "voces"
 MODELO_CLAUDE = "claude-opus-5-5"
 ESFUERZO_CLAUDE = "low"      # low = responde más rápido; sube a "medium" si quieres respuestas más pensadas
 MAX_MENSAJES_HISTORIAL = 40  # al pasar de aquí, Jarvis empieza una conversación nueva
+MINUTOS_NUEVA_CONVERSACION = 30  # tras este rato sin hablar, la charla se resume y empieza otra
 
 # Modelo de voz offline (Vosk). Se descarga con scripts/descargar_modelo.py
 CARPETA_MODELO = RAIZ / "modelos" / "vosk-model-small-es-0.42"

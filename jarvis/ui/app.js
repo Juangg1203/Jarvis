@@ -160,6 +160,12 @@
       if (d.respuesta) mensaje(d.respuesta, "jarvis", d.expresion === "triste" || d.expresion === "enojado");
       if (d.mensaje) mensaje(d.mensaje, "jarvis", true);
       if (d.resultados) mostrarResultados(d.resultados);
+      if (d.avisos !== undefined) {
+        const ins = $("insignia");
+        ins.hidden = !d.avisos; ins.textContent = d.avisos;
+        if (!$("panelAgenda").hidden) abrirAgenda();
+      }
+      if (d.aviso) { document.body.classList.add("alerta"); setTimeout(() => document.body.classList.remove("alerta"), 2000); }
     },
   };
 
@@ -178,7 +184,7 @@
   };
   $("btnOcultar").onclick = () => api() && api().ocultar();
   addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && api()) { api().callar(); $("panelAjustes").hidden = true; }
+    if (e.key === "Escape" && api()) { api().callar(); $("panelAjustes").hidden = true; $("panelAgenda").hidden = true; }
   });
 
   // ---------- ajustes ----------
@@ -207,6 +213,43 @@
   };
   $("btnNueva").onclick = () => { api() && api().nueva_conversacion(); chat.innerHTML = ""; lista.innerHTML = ""; panel.hidden = true; };
 
+  // ---------- agenda ----------
+  const panelAgenda = $("panelAgenda");
+  function itemLista(texto, extra, alQuitar) {
+    const li = document.createElement("li");
+    li.innerHTML = "<span></span><em></em><button title='Quitar' aria-label='Quitar'>✕</button>";
+    li.children[0].textContent = texto;
+    li.children[1].textContent = extra || "";
+    li.children[2].onclick = alQuitar;
+    return li;
+  }
+  function pintarAgenda(p) {
+    const avisos = $("listaAvisos"), rutinas = $("listaRutinas"), datos = $("listaDatos");
+    avisos.innerHTML = ""; rutinas.innerHTML = ""; datos.innerHTML = "";
+    const iconos = { alarma: "⏰ ", temporizador: "⏱ ", recordatorio: "🔔 " };
+    p.avisos.forEach((a) => avisos.appendChild(itemLista((iconos[a.tipo] || "") + (a.mensaje || a.tipo), a.cuando,
+      async () => pintarAgenda(await api().cancelar_aviso(a.id)))));
+    p.rutinas.forEach((r) => {
+      const b = document.createElement("button");
+      b.textContent = "▶ " + r;
+      b.onclick = () => { panelAgenda.hidden = true; api().ejecutar_rutina(r); };
+      rutinas.appendChild(b);
+    });
+    p.datos.forEach((d, i) => datos.appendChild(itemLista(d, "", async () => pintarAgenda(await api().olvidar_dato(i)))));
+    $("infoResumenes").textContent = p.resumenes
+      ? "Además recuerda " + p.resumenes + (p.resumenes === 1 ? " conversación anterior." : " conversaciones anteriores.")
+      : "Di «recuerda que…» para que lo guarde.";
+    $("insignia").hidden = !p.avisos.length; $("insignia").textContent = p.avisos.length;
+  }
+  async function abrirAgenda() {
+    if (!api() || !api().leer_panel) return;
+    pintarAgenda(await api().leer_panel());
+    panelAgenda.hidden = false;
+  }
+  $("btnAgenda").onclick = abrirAgenda;
+  $("btnCerrarAgenda").onclick = () => { panelAgenda.hidden = true; };
+  panelAgenda.addEventListener("click", (e) => { if (e.target === panelAgenda) panelAgenda.hidden = true; });
+
   window.addEventListener("pywebviewready", () => window.jarvis.actualizar({ estado: "esperando" }));
 
   // Modo demostración al abrir index.html en un navegador normal.
@@ -226,7 +269,12 @@
       escuchar: () => jarvis.actualizar({ estado: "escuchando" }), callar() {}, ocultar() {}, abrir_resultado() {},
       leer_ajustes: async () => ({ tiene_clave: false, voz_motor: "piper", modo_conversacion: true }),
       guardar_ajustes: async () => ({}), nueva_conversacion() {},
+      leer_panel: async () => ({ avisos: [{ id: "a", tipo: "recordatorio", mensaje: "sacar la ropa", cuando: "en 20 minutos" },
+        { id: "b", tipo: "alarma", mensaje: "", cuando: "mañana a las 06:30" }], rutinas: ["estudio", "normal", "buenos dias"],
+        datos: ["Su equipo favorito es el Nacional", "Estudia ingeniería de sistemas"], resumenes: 3 }),
+      cancelar_aviso: async () => window.pywebview.api.leer_panel(), olvidar_dato: async () => window.pywebview.api.leer_panel(),
+      ejecutar_rutina() {},
     } };
-    jarvis.actualizar({ estado: "esperando" });
+    jarvis.actualizar({ estado: "esperando", avisos: 2 });
   }, 1200);
 })();

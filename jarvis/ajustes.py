@@ -4,7 +4,9 @@ import os
 
 from . import config
 
-_ARCHIVO = config.CARPETA_DATOS / "ajustes.json"
+def _ARCHIVO():
+    return config.CARPETA_DATOS / "ajustes.json"
+
 
 POR_DEFECTO = {
     "anthropic_api_key": "",
@@ -17,7 +19,7 @@ POR_DEFECTO = {
 def cargar() -> dict:
     datos = dict(POR_DEFECTO)
     try:
-        datos.update(json.loads(_ARCHIVO.read_text(encoding="utf-8")))
+        datos.update(json.loads(_ARCHIVO().read_text(encoding="utf-8")))
     except (OSError, ValueError):
         pass
     return datos
@@ -27,7 +29,7 @@ def guardar(cambios: dict) -> dict:
     datos = cargar()
     datos.update({k: v for k, v in cambios.items() if k in POR_DEFECTO})
     config.CARPETA_DATOS.mkdir(parents=True, exist_ok=True)
-    _ARCHIVO.write_text(json.dumps(datos, indent=2, ensure_ascii=False), encoding="utf-8")
+    _ARCHIVO().write_text(json.dumps(datos, indent=2, ensure_ascii=False), encoding="utf-8")
     return datos
 
 

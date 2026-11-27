@@ -14,6 +14,10 @@
       <span class="titulo">J.A.R.V.I.S</span>
       <span class="estado-punto" id="punto"></span>
       <span class="estado-texto" id="estadoTexto">Iniciando…</span>
+      <button class="icono-btn agenda-btn" id="btnAgenda" title="Recordatorios, rutinas y memoria" aria-label="Agenda">
+        <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22Zm7-6V11a7 7 0 0 0-5.5-6.84V3.5a1.5 1.5 0 0 0-3 0v.66A7 7 0 0 0 5 11v5l-2 2v1h18v-1Z"/></svg>
+        <span class="insignia" id="insignia" hidden>0</span>
+      </button>
       <button class="icono-btn" id="btnAjustes" title="Ajustes" aria-label="Ajustes">
         <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.3 7.3 0 0 0-1.7-1L15 3.3h-4l-.4 2.6a7.3 7.3 0 0 0-1.7 1l-2.5-1-2 3.5L6.5 11a7.6 7.6 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1a7.3 7.3 0 0 0 1.7 1l.4 2.6h4l.4-2.6a7.3 7.3 0 0 0 1.7-1l2.5 1 2-3.5ZM13 15.5A3.5 3.5 0 1 1 13 8.5a3.5 3.5 0 0 1 0 7Z" transform="translate(-1 0)"/></svg>
       </button>
@@ -82,6 +86,29 @@
         <button type="button" id="btnNueva">Nueva conversación</button>
         <button type="button" id="btnGuardar" class="primario">Guardar</button>
       </div>
+    </div>
+  </aside>
+
+  <!-- Panel de agenda: recordatorios, rutinas y memoria -->
+  <aside class="ajustes" id="panelAgenda" hidden>
+    <div class="ajustes-caja agenda">
+      <h2>Tu agenda</h2>
+      <section>
+        <h3>Recordatorios y alarmas</h3>
+        <ul class="lista" id="listaAvisos"></ul>
+        <small>Di «recuérdame en 20 minutos…» o «pon una alarma a las 7».</small>
+      </section>
+      <section>
+        <h3>Rutinas</h3>
+        <div class="chips" id="listaRutinas"></div>
+        <small>Di «modo estudio», o pídele a Jarvis que cree una rutina nueva.</small>
+      </section>
+      <section>
+        <h3>Lo que Jarvis recuerda de ti</h3>
+        <ul class="lista" id="listaDatos"></ul>
+        <small id="infoResumenes">Di «recuerda que…» para que lo guarde.</small>
+      </section>
+      <div class="botones"><button type="button" id="btnCerrarAgenda" class="primario">Cerrar</button></div>
     </div>
   </aside>
 

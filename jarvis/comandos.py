@@ -8,7 +8,9 @@ import os
 import re
 from dataclasses import dataclass, field
 
-from . import archivos, config, seguridad
+from . import archivos, config, recordatorios, seguridad
+from .memoria import Memoria
+from .rutinas import Rutinas
 from .texto import extraer_numero, normalizar
 
 
@@ -33,10 +35,25 @@ _RE_ABRIR = re.compile(r"^(?:abre|abrir|abreme|ejecuta|ejecutar|inicia|iniciar|l
 _RE_BORRAR = re.compile(r"^(?:elimina|eliminar|eliminame|borra|borrar|borrame|quita)\s+" + _ARTICULOS + _TIPO + _LLAMADO + r"(.+)$")
 
 
+_RE_LISTAR_AVISOS = re.compile(r"\b(?:que|cuales|mis|dime (?:mis|los)|lista de)\s+(?:recordatorios|alarmas|temporizadores|avisos|pendientes)\b|"
+                               r"\bque (?:tengo|hay) pendiente")
+_RE_CANCELAR = re.compile(r"^(?:cancela|cancelar|quita|borra|elimina|apaga|deten|para)\s+(?:el |la |los |las |todos los |todas las |mi |mis )?"
+                          r"(recordatorio|alarma|temporizador|aviso)(?:s|es)?\b(.*)$")
+_RE_RUTINA = re.compile(r"^(?:(?:activa|activar|inicia|iniciar|empieza|pon|ponme|ejecuta|arranca|entra en|entrar en)\s+)?"
+                        r"(?:el |la |en )?(?:modo|rutina)\s+(.+)$")
+_RE_SALIR_RUTINA = re.compile(r"^(?:termina|terminar|desactiva|desactivar|sal del|salir del|apaga|quita)\s+(?:el )?modo\b")
+_RE_RECORDAR = re.compile(r"^(?:recuerda|acuerdate|apunta|anota|guarda|memoriza)\s+(?:de\s+)?que\s+(.+)$")
+_RE_QUE_SABES = re.compile(r"^(?:que (?:sabes|recuerdas) (?:de|sobre) mi|que tienes (?:guardado|anotado))")
+_RE_OLVIDAR = re.compile(r"^(?:olvida|olvidate de|borra de tu memoria)\s+(?:que\s+|lo de\s+|lo que te dije de\s+)?(.+)$")
+
+
 class Cerebro:
-    def __init__(self):
+    def __init__(self, agenda=None, memoria=None, rutinas=None):
         self.ultimos_resultados: list[str] = []
         self.pendiente_borrar: str | None = None
+        self.agenda = agenda if agenda is not None else recordatorios.Agenda()
+        self.memoria = memoria if memoria is not None else Memoria()
+        self.rutinas = rutinas if rutinas is not None else Rutinas()
 
     # ---------- punto de entrada ----------
     def procesar(self, texto: str, solo_ordenes: bool = False) -> Respuesta:
@@ -50,6 +67,10 @@ class Cerebro:
 
         if self.pendiente_borrar:
             return self._confirmar_borrado(t)
+
+        r = self._organizador(texto, t, solo_ordenes)
+        if r is not None:
+            return r
 
         if solo_ordenes and (t in {"hola", "buenas", "buenos dias", "buenas tardes", "buenas noches", "gracias",
                                    "muchas gracias", "ayuda", "que puedes hacer", "que sabes hacer"}):
@@ -75,8 +96,9 @@ class Cerebro:
             seguridad.registrar("bloquear_equipo", str(ok))
             return Respuesta("Equipo bloqueado." if ok else "No pude bloquear el equipo.", "normal" if ok else "triste")
         if t in {"ayuda", "que puedes hacer", "que sabes hacer"}:
-            return Respuesta("Puedo buscar archivos, abrir archivos y aplicaciones, mandar archivos a la papelera, "
-                             "decirte la hora, revisar el antivirus y bloquear el equipo.", "riendo")
+            return Respuesta("Puedo buscar y abrir archivos y aplicaciones, mandar archivos a la papelera, "
+                             "ponerte recordatorios, alarmas y temporizadores, activar rutinas como el modo estudio, "
+                             "recordar cosas de ti, revisar el antivirus y bloquear el equipo.", "riendo")
 
         if m := _RE_BUSCAR.match(t):
             return self._buscar(m.group(1))
@@ -86,6 +108,88 @@ class Cerebro:
             return self._preparar_borrado(m.group(1))
 
         return Respuesta("No entendí esa orden. Di «ayuda» para ver lo que sé hacer.", "pensando", entendida=False)
+
+    # ---------- recordatorios, rutinas y memoria ----------
+    def _organizador(self, original, t, solo_ordenes):
+        # Recordatorios, alarmas y temporizadores
+        aviso = recordatorios.interpretar(original)
+        if aviso:
+            return self.crear_aviso(aviso["cuando"], aviso["mensaje"], aviso["tipo"])
+        if recordatorios._RE_PREFIJO.match(t):
+            if solo_ordenes:
+                return Respuesta("", "pensando", entendida=False)  # Claude entenderá la hora
+            return Respuesta("¿Cuándo te aviso? Dime por ejemplo «recuérdame en 10 minutos» o "
+                             "«recuérdame mañana a las 8».", "pensando")
+        if _RE_LISTAR_AVISOS.search(t):
+            return Respuesta(self.listar_avisos(), "normal")
+        if m := _RE_CANCELAR.match(t):
+            plural = re.search(r"\b(?:tod[oa]s|recordatorios|alarmas|temporizadores|avisos)\b", t)
+            return self.cancelar_avisos(m.group(2), todos=bool(plural))
+
+        # Rutinas
+        if t in {"que rutinas tengo", "cuales son mis rutinas", "mis rutinas", "que modos tienes", "que modos tengo"}:
+            nombres = self.rutinas.nombres()
+            return Respuesta("Tus rutinas son: " + ", ".join(nombres) + ". Di «modo» y el nombre para activarla."
+                             if nombres else "No tienes rutinas todavía.", "normal")
+        if _RE_SALIR_RUTINA.match(t) and "normal" in self.rutinas.rutinas:
+            return Respuesta(self.rutinas.ejecutar("normal", self.agenda), "guino")
+        nombre = None
+        if m := _RE_RUTINA.match(t):
+            nombre = self.rutinas.buscar(m.group(1))
+            if not nombre:
+                return Respuesta(f"No tengo una rutina llamada {m.group(1)}. Puedes pedirme que la cree.", "pensando",
+                                 entendida=not solo_ordenes)
+        elif t in {normalizar(n) for n in self.rutinas.nombres()}:
+            nombre = self.rutinas.buscar(t)
+        if nombre:
+            return Respuesta(self.rutinas.ejecutar(nombre, self.agenda), "riendo")
+
+        # Memoria
+        if m := _RE_RECORDAR.match(t):
+            dato = m.group(1)
+            originales = {normalizar(w): w for w in re.findall(r"[\wáéíóúüñÁÉÍÓÚÜÑ]+", original)}
+            dato = " ".join(originales.get(w, w) for w in dato.split())
+            nuevo = self.memoria.recordar(dato)
+            return Respuesta("Anotado, lo recordaré." if nuevo else "Eso ya lo tenía anotado.", "guino")
+        if _RE_QUE_SABES.match(t):
+            datos = self.memoria.datos
+            if not datos:
+                return Respuesta("Todavía no me has pedido recordar nada. Dime por ejemplo «recuerda que mi color favorito es el azul».", "normal")
+            return Respuesta("Esto es lo que recuerdo: " + "; ".join(d["texto"] for d in datos[-10:]) + ".", "riendo")
+        if m := _RE_OLVIDAR.match(t):
+            n = self.memoria.olvidar(m.group(1))
+            return Respuesta("Listo, lo olvidé." if n else "No tenía nada anotado sobre eso.", "normal" if n else "pensando")
+        return None
+
+    def crear_aviso(self, cuando, mensaje="", tipo="recordatorio") -> Respuesta:
+        item = self.agenda.agregar(cuando, mensaje, tipo)
+        seguridad.registrar("aviso", f"{item['cuando']} {tipo} {mensaje}")
+        nombre = {"alarma": "la alarma", "temporizador": "el temporizador"}.get(tipo, "el recordatorio")
+        texto = f"Listo, puse {nombre} {recordatorios.describir(cuando)}"
+        return Respuesta(texto + (f": {mensaje}." if mensaje else "."), "guino")
+
+    def listar_avisos(self) -> str:
+        items = self.agenda.pendientes()
+        if not items:
+            return "No tienes recordatorios ni alarmas pendientes."
+        import datetime as _dt
+        partes = [f"{i}, {recordatorios.describir(_dt.datetime.fromisoformat(x['cuando']))} {x['mensaje'] or x['tipo']}"
+                  for i, x in enumerate(items[:8], 1)]
+        return f"Tienes {len(items)}: " + "; ".join(partes) + "."
+
+    def cancelar_avisos(self, resto="", todos=False) -> Respuesta:
+        items = self.agenda.pendientes()
+        if not items:
+            return Respuesta("No hay nada que cancelar.", "normal")
+        n = extraer_numero(resto.strip()) if resto.strip() else None
+        if n is not None:
+            quitados = self.agenda.cancelar(n)
+        elif todos or len(items) == 1:
+            quitados = self.agenda.cancelar(None)
+        else:
+            return Respuesta(f"Tienes {len(items)} pendientes. Dime cuál, por ejemplo «cancela el recordatorio dos», "
+                             "o «cancela todos los recordatorios».", "pensando")
+        return Respuesta("Cancelado." if quitados else "No encontré ese número.", "normal" if quitados else "pensando")
 
     # ---------- acciones ----------
     def _buscar(self, consulta: str) -> Respuesta:

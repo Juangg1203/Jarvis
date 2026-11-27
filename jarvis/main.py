@@ -12,9 +12,11 @@ if __package__ in (None, ""):  # permite ejecutar "python jarvis/main.py"
 
 import webview
 
-from jarvis import ajustes, config
+from jarvis import ajustes, config, recordatorios
 from jarvis.comandos import Cerebro, Respuesta
 from jarvis.ia import Conversador
+from jarvis.memoria import Memoria
+from jarvis.rutinas import Rutinas
 from jarvis.voz import Hablante, Oyente
 
 UI = Path(__file__).resolve().parent / "ui"
@@ -24,7 +26,9 @@ class Jarvis:
     def __init__(self):
         self.ventana = None
         self.ajustes = ajustes.cargar()
-        self.cerebro = Cerebro()
+        self.agenda = recordatorios.Agenda(al_sonar=self._sonar)
+        self.cerebro = Cerebro(agenda=self.agenda, memoria=Memoria(), rutinas=Rutinas())
+        self._alarma_activa = None
         self.conversador = Conversador(self.cerebro)
         self.hablante = Hablante(self.ajustes["voz_motor"], self.ajustes["voz_edge"], al_nivel=self._nivel)
         self.dormido = False
@@ -73,8 +77,41 @@ class Jarvis:
         else:
             self._ui(estado="esperando")
 
+    # ---------- recordatorios ----------
+    def _sonar(self, item):
+        """Llega la hora de un recordatorio, alarma o temporizador."""
+        texto = recordatorios.texto_aviso(item)
+        cara = "sorprendido" if item.get("tipo") != "recordatorio" else "guino"
+        try:
+            self.mostrar()
+        except Exception:
+            pass
+        self.dormido = False
+        self._ui(estado="hablando", expresion=cara, respuesta="⏰ " + texto, aviso=True,
+                 avisos=len(self.agenda.pendientes()))
+        self.hablante.decir(texto)
+        self.hablante.despues(lambda: self._ui(estado="esperando"))
+        if item.get("tipo") == "alarma":
+            # La alarma se repite hasta 3 veces si no le haces caso.
+            self._alarma_activa = item["id"]
+
+            def repetir():
+                for _ in range(2):
+                    time.sleep(25)
+                    if self._alarma_activa != item["id"]:
+                        return
+                    self._ui(estado="hablando", expresion="sorprendido")
+                    self.hablante.decir(texto)
+                    self.hablante.despues(lambda: self._ui(estado="esperando"))
+                self._alarma_activa = None
+            threading.Thread(target=repetir, daemon=True).start()
+
+    def _avisos_cambiaron(self):
+        self._ui(avisos=len(self.agenda.pendientes()))
+
     # ---------- cerebro ----------
     def ejecutar(self, texto: str):
+        self._alarma_activa = None  # cualquier orden apaga la alarma que esté sonando
         with self._lock:
             self.hablante.callar()
             self._ui(estado="pensando", orden=texto)
@@ -90,6 +127,7 @@ class Jarvis:
                      resultados=[{"nombre": os.path.basename(p), "ruta": p} for p in r.resultados])
             self.hablante.decir(r.texto)
             self.hablante.despues(self._al_terminar_de_hablar)
+            self._avisos_cambiaron()
 
     def _conversar(self, texto):
         import anthropic
@@ -111,6 +149,7 @@ class Jarvis:
                 al_resultados=lambda res: self._ui(resultados=[{"nombre": os.path.basename(p), "ruta": p} for p in res]),
             )
             self._ui(respuesta_fin=True)
+            self._avisos_cambiaron()
         except anthropic.AuthenticationError:
             self._avisar("Mi clave de Claude no es válida. Revísala en Ajustes.", "triste")
         except anthropic.PermissionDeniedError:
@@ -178,9 +217,10 @@ class Jarvis:
             self._bandeja()
             self.oyente.iniciar()
             time.sleep(0.5)
+            self._avisos_cambiaron()
             self._ui(estado="hablando", expresion="riendo")
             self.hablante.decir(f"Hola {config.NOMBRE_USUARIO}, estoy listo.")
-            self.hablante.despues(lambda: self._ui(estado="esperando"))
+            self.hablante.despues(lambda: (self._ui(estado="esperando"), self.agenda.iniciar()))
 
         webview.start(al_arrancar, debug="--debug" in sys.argv)
 
@@ -195,6 +235,7 @@ class Api:
         threading.Thread(target=self._j.ejecutar, args=(texto,), daemon=True).start()
 
     def escuchar(self):
+        self._j._alarma_activa = None
         self._j.hablante.callar()
         self._j.oyente.escuchar_ahora()
 
@@ -212,6 +253,31 @@ class Api:
 
     def nueva_conversacion(self):
         self._j.conversador.olvidar()
+
+    # ---------- panel de recordatorios, rutinas y memoria ----------
+    def leer_panel(self):
+        import datetime as dt
+        c = self._j.cerebro
+        return {
+            "avisos": [{"id": x["id"], "tipo": x["tipo"], "mensaje": x["mensaje"],
+                        "cuando": recordatorios.describir(dt.datetime.fromisoformat(x["cuando"]))}
+                       for x in self._j.agenda.pendientes()],
+            "rutinas": c.rutinas.nombres(),
+            "datos": [d["texto"] for d in c.memoria.datos],
+            "resumenes": len(c.memoria.resumenes),
+        }
+
+    def cancelar_aviso(self, id_):
+        self._j.agenda.cancelar(str(id_))
+        self._j._avisos_cambiaron()
+        return self.leer_panel()
+
+    def olvidar_dato(self, indice):
+        self._j.cerebro.memoria.olvidar(int(indice) + 1)
+        return self.leer_panel()
+
+    def ejecutar_rutina(self, nombre):
+        self.enviar_texto(f"modo {nombre}")
 
     def leer_ajustes(self):
         a = ajustes.cargar()
