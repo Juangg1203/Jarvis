@@ -105,62 +105,133 @@ def ruta_modelo():
 
 
 class Camara:
-    """Mira la cámara en segundo plano y llama al_gesto(nombre) cuando reconoce uno."""
+    """Una sola cámara compartida: gestos de la mano, verificar tu cara y la vigilancia.
+
+    Cada uso se enciende y apaga por separado; la cámara se apaga sola cuando ningún uso la necesita.
+    """
 
     def __init__(self, al_gesto, al_estado=None):
         self.al_gesto = al_gesto
         self.al_estado = al_estado or (lambda activo, error="": None)
+        self._usos = set()
+        self._suscritos = {}  # nombre -> [función(cuadro_bgr), cada_seg, última_vez]
         self._parar = threading.Event()
         self._hilo = None
+        self.ultimo_cuadro = None  # último cuadro BGR (sin espejo), para fotos y verificar caras
 
     @property
     def activa(self):
         return self._hilo is not None and self._hilo.is_alive()
 
-    def iniciar(self):
+    @property
+    def gestos_activos(self):
+        return self.activa and "gestos" in self._usos
+
+    def iniciar(self, uso="gestos"):
+        self._usos.add(uso)
+        self._parar.clear()
+        if uso == "gestos" and self.activa:
+            self.al_estado(True)
         if self.activa:
             return
-        self._parar.clear()
-        self._hilo = threading.Thread(target=self._bucle, daemon=True, name="gestos")
+        self._hilo = threading.Thread(target=self._bucle, daemon=True, name="camara")
         self._hilo.start()
 
-    def detener(self):
-        self._parar.set()
+    def detener(self, uso="gestos"):
+        self._usos.discard(uso)
+        if uso == "gestos":
+            self.al_estado(False)
+        if not self._usos:
+            self._parar.set()
 
-    def _bucle(self):
+    def suscribir(self, nombre, funcion, cada=1.0):
+        self._suscritos[nombre] = [funcion, cada, 0.0]
+        self.iniciar(nombre)
+
+    def desuscribir(self, nombre):
+        self._suscritos.pop(nombre, None)
+        self.detener(nombre)
+
+    def foto(self, espera=4.0):
+        """Devuelve un cuadro BGR actual (enciende la cámara un momento si hace falta)."""
+        propia = not self.activa
+        if propia:
+            self.ultimo_cuadro = None
+            self.iniciar("foto")
+        fin = time.monotonic() + espera
         try:
-            import cv2
-            import mediapipe as mp
+            # deja pasar unos cuadros para que la cámara ajuste la luz
+            time.sleep(0.8 if propia else 0)
+            while time.monotonic() < fin:
+                if self.ultimo_cuadro is not None:
+                    return self.ultimo_cuadro.copy()
+                if not self.activa:
+                    return None
+                time.sleep(0.05)
+            return None
+        finally:
+            if propia:
+                self.detener("foto")
+
+    def _detector_manos(self):
+        try:
+            import mediapipe  # noqa: F401
             from mediapipe.tasks.python import BaseOptions, vision
         except ImportError as e:
-            self.al_estado(False, f"Falta instalar {e.name}. Vuelve a ejecutar instalar.bat.")
-            return
+            return None, f"Falta instalar {e.name}. Vuelve a ejecutar instalar.bat."
         if not ruta_modelo().exists():
-            self.al_estado(False, "Falta el modelo de manos. Vuelve a ejecutar instalar.bat.")
-            return
+            return None, "Falta el modelo de manos. Vuelve a ejecutar instalar.bat."
         opciones = vision.HandLandmarkerOptions(
             base_options=BaseOptions(model_asset_path=str(ruta_modelo())),
             running_mode=vision.RunningMode.VIDEO, num_hands=1,
             min_hand_detection_confidence=0.6, min_tracking_confidence=0.5)
+        return vision.HandLandmarker.create_from_options(opciones), ""
+
+    def _bucle(self):
+        try:
+            import cv2
+        except ImportError as e:
+            self._usos.clear()
+            self.al_estado(False, f"Falta instalar {e.name}. Vuelve a ejecutar instalar.bat.")
+            return
         camara = cv2.VideoCapture(0, cv2.CAP_DSHOW) if hasattr(cv2, "CAP_DSHOW") else cv2.VideoCapture(0)
         if not camara.isOpened():
+            self._usos.clear()
             self.al_estado(False, "No pude abrir la cámara. ¿La está usando otra aplicación?")
             return
         camara.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
         camara.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-        estable = Estabilizador()
-        self.al_estado(True)
-        inicio = time.monotonic()
+        estable, detector, inicio = Estabilizador(), None, time.monotonic()
+        if "gestos" in self._usos:
+            self.al_estado(True)
         try:
-            with vision.HandLandmarker.create_from_options(opciones) as detector:
-                while not self._parar.is_set():
-                    ok, cuadro = camara.read()
-                    if not ok:
-                        time.sleep(0.05)
-                        continue
+            while not self._parar.is_set():
+                ok, cuadro = camara.read()
+                if not ok:
+                    time.sleep(0.05)
+                    continue
+                self.ultimo_cuadro = cuadro
+                ahora = time.monotonic()
+                for nombre, s in list(self._suscritos.items()):
+                    if ahora - s[2] >= s[1]:
+                        s[2] = ahora
+                        try:
+                            s[0](cuadro)
+                        except Exception as e:
+                            print(f"[camara] {nombre}: {e}")
+                if "gestos" in self._usos:
+                    if detector is None:
+                        detector, error = self._detector_manos()
+                        if detector is None:
+                            self._usos.discard("gestos")
+                            self.al_estado(False, error)
+                            if not self._usos:
+                                break
+                            continue
+                    import mediapipe as mp
                     rgb = cv2.cvtColor(cv2.flip(cuadro, 1), cv2.COLOR_BGR2RGB)
                     imagen = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
-                    r = detector.detect_for_video(imagen, int((time.monotonic() - inicio) * 1000))
+                    r = detector.detect_for_video(imagen, int((ahora - inicio) * 1000))
                     gesto = clasificar(r.hand_landmarks[0]) if r.hand_landmarks else None
                     final = estable.ver(gesto)
                     if final:
@@ -168,7 +239,10 @@ class Camara:
                             self.al_gesto(final)
                         except Exception as e:
                             print(f"[gestos] {e}")
-                    time.sleep(1 / 20)
+                time.sleep(1 / 20)
         finally:
             camara.release()
+            if detector is not None:
+                detector.close()
+            self.ultimo_cuadro = None
             self.al_estado(False)

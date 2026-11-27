@@ -22,6 +22,20 @@ ESFUERZO_CLAUDE = "low"      # low = responde más rápido; sube a "medium" si q
 MAX_MENSAJES_HISTORIAL = 40  # al pasar de aquí, Jarvis empieza una conversación nueva
 MINUTOS_NUEVA_CONVERSACION = 30  # tras este rato sin hablar, la charla se resume y empieza otra
 
+# Búsquedas en internet sin Claude. Tu ciudad para el clima (si la dejas vacía, Jarvis la busca en lo que
+# recuerda de ti: di «recuerda que vivo en Bogotá») y el país de las noticias (CO, MX, AR, ES, US...).
+CIUDAD = ""
+PAIS_NOTICIAS = "CO"
+
+# App del celular: puerto de la página que abre el teléfono en el wifi de tu casa.
+PUERTO_CELULAR = 8765
+
+# Seguridad: parecido mínimo (0 a 1) para aceptar tu voz o tu cara. Súbelo si alguien más logra engañarlo;
+# bájalo si a ti no te reconoce.
+UMBRAL_VOZ = 0.50
+UMBRAL_CARA = 0.40
+DISCO_LLENO_PORCENTAJE = 90
+
 # Modelo de voz offline (Vosk). Se descarga con scripts/descargar_modelo.py
 CARPETA_MODELO = RAIZ / "modelos" / "vosk-model-small-es-0.42"
 

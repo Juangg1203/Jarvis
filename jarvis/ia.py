@@ -39,7 +39,12 @@ Si te pregunta por algo que hablaron antes y no está en tu memoria, búscalo en
 Puedes leer documentos (PDF, Word, PowerPoint, texto) con leer_documento para resumirlos o responder \
 preguntas sobre ellos; resume en voz, corto y claro, y ofrece profundizar. También controlas el PC: \
 volumen, brillo, wifi, batería, cerrar programas, y apagar, reiniciar o suspender. Apagar, reiniciar, \
-suspender y forzar cierres quedan pendientes hasta que él diga «sí»: pídele que confirme."""
+suspender y forzar cierres quedan pendientes hasta que él diga «sí»: pídele que confirme.
+
+Tienes búsqueda en internet: úsala para el clima, noticias, resultados deportivos, precios o cualquier \
+dato actual o que no sepas con seguridad. Cuéntalo en voz, en dos o tres frases, sin leer direcciones web \
+ni citar fuentes salvo que te lo pida. Para el clima, si no dice la ciudad, usa la de su memoria; si no \
+la sabes, pregúntasela una vez y guárdala con recordar_dato."""
 
 HERRAMIENTAS = [
     {
@@ -170,6 +175,8 @@ HERRAMIENTAS += [
 ]
 for _h in HERRAMIENTAS:
     _h["eager_input_streaming"] = True
+# Búsqueda en internet: la hace Claude en sus servidores (no hay que programarla aquí).
+HERRAMIENTAS.append({"type": "web_search_20260209", "name": "web_search", "max_uses": 3})
 
 
 class Conversador:
@@ -422,6 +429,8 @@ class Conversador:
             self.historial.append({"role": "assistant", "content": respuesta.content})
             if respuesta.stop_reason == "refusal":
                 return total or "Prefiero no responder a eso."
+            if respuesta.stop_reason == "pause_turn":
+                continue  # la búsqueda en internet sigue en el servidor: se reanuda sin añadir nada
             usos = [b for b in respuesta.content if b.type == "tool_use"]
             if not usos:
                 return total

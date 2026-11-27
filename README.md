@@ -77,14 +77,14 @@ vencieron mientras estaba apagado. La campana 🔔 de arriba muestra cuántos ha
 Con Claude puedes crear rutinas nuevas hablando: «crea un modo juego que abra Steam y Discord y
 me avise en una hora». También puedes editarlas a mano en `%LOCALAPPDATA%\Jarvis\rutinas.json`.
 
-### Resumir documentos (nuevo)
+### Resumir documentos
 
 Arrastra un **PDF, Word (.docx), PowerPoint (.pptx) o .txt** a la ventana, o di
 «resume el documento informe» (lo busca por nombre). Con Claude te hace un resumen de verdad y luego
 puedes preguntarle cosas: «¿qué dice de las fechas?». Sin internet te da las frases más importantes
 y los temas. Los PDF escaneados (solo imagen) no tienen texto y Jarvis te avisa.
 
-### Controlar el PC (nuevo, sin internet)
+### Controlar el PC (sin internet)
 
 | Dices… | Jarvis… |
 |---|---|
@@ -100,7 +100,7 @@ y los temas. Los PDF escaneados (solo imagen) no tienen texto y Jarvis te avisa.
 
 Nunca cierra procesos de Windows ni a sí mismo.
 
-### Lenguaje de señas con la cámara (nuevo, sin internet)
+### Lenguaje de señas con la cámara (sin internet)
 
 Toca el botón ✋ arriba o di «activa los gestos». La cámara se procesa solo en tu portátil
 (MediaPipe); no se graba ni se envía nada.
@@ -116,6 +116,49 @@ Toca el botón ✋ arriba o di «activa los gestos». La cámara se procesa solo
 | 🤟 Te quiero | Muestra u oculta la ventana |
 
 Sostén el gesto casi un segundo. En Ajustes puedes hacer que se enciendan al abrir Jarvis.
+
+### Seguridad (nuevo)
+
+| Dices… | Jarvis… |
+|---|---|
+| «Aprende mi voz» | Te pide tres frases y guarda la huella de tu voz |
+| «Aprende mi cara» | Te mira unos segundos por la cámara y guarda la huella de tu cara |
+| «Solo obedéceme a mí» | Ignora las órdenes de voz de otras personas (acepta tu voz o tu cara frente a la cámara) |
+| «Vigila el computador» (o el botón 🛡️) | Te da 20 segundos para irte. Si alguien usa el PC, le toma una foto y lo bloquea. Si te reconoce la cara al volver, se apaga solo y te cuenta |
+| «Ya volví» / «Desactiva la vigilancia» | La apaga y te dice si vio a alguien |
+| «Muéstrame las fotos» | Abre la carpeta de fotos de intrusos |
+| «Revisa la memoria USB» | La analiza con Windows Defender |
+| «¿Cómo está el disco?» / «Libera espacio» | Espacio libre / abre el Liberador de espacio |
+
+Además avisa solo cuando conectas una memoria USB (y te ofrece revisarla) y cuando un disco pasa del
+90 % (una vez al día). Lo que escribes en la ventana siempre se obedece: si estás frente al teclado, eres tú.
+Las huellas de voz y cara son solo números guardados en tu portátil; nunca se guardan grabaciones ni fotos tuyas.
+
+### Buscar en internet (nuevo)
+
+«¿Qué clima hace en Bogotá?», «¿Va a llover mañana?», «Dame las noticias», «Noticias de fútbol»,
+«Busca en internet…», «¿Quién es…?». Con la clave de Claude, Jarvis busca en la web y te lo cuenta en
+voz. Sin la clave usa servicios gratis (Open-Meteo, Google Noticias y Wikipedia). Di «recuerda que vivo
+en Bogotá» para que sepa tu ciudad.
+
+### App del celular (nuevo)
+
+1. En ⚙ Ajustes marca «Hablar con Jarvis desde el celular». La primera vez Windows pregunta por el
+   firewall: deja marcadas las **redes privadas** y dale Permitir.
+2. Escanea el código QR con la cámara del celular (debe estar en el mismo wifi).
+3. En el navegador del celular, menú ⋮ → «Añadir a pantalla de inicio». Queda como una app.
+
+Escribe o dicta con el micrófono del teclado; Jarvis hace la orden en el PC y te responde en el celular
+(con voz si quieres). También te llegan las alertas: intrusos, memorias USB y recordatorios.
+Solo funciona dentro del wifi de tu casa y cada celular necesita el código secreto del QR; tras 10 códigos
+equivocados ese aparato queda bloqueado 10 minutos. «Cambiar código» desvincula todos los celulares.
+
+### Apariencia (nuevo)
+
+El holograma ahora respira, se balancea, mira a los lados y parpadea solo, y cambia de postura cuando
+escucha, piensa o duerme. En Ajustes → Colores eliges el tema: Aurora (multicolor), Océano (el azul
+original), Esmeralda o Atardecer. El color también cambia con el estado: verde al escucharte, violeta al
+pensar y rojo cuando está vigilando.
 
 ### Memoria
 
@@ -210,7 +253,12 @@ jarvis/
   seguridad.py   rutas protegidas, registro, Windows Defender, bloquear equipo
   control.py     volumen, brillo, wifi, batería, apagar, cerrar programas
   documentos.py  leer y resumir PDF, Word, PowerPoint y texto
-  gestos.py      cámara y reconocimiento de gestos de la mano (MediaPipe)
+  gestos.py      cámara compartida y reconocimiento de gestos de la mano (MediaPipe)
+  identidad.py   huella de tu voz (Vosk) y de tu cara (OpenCV) para «solo obedéceme a mí»
+  vigilancia.py  memorias USB, disco lleno y vigilancia con foto de intrusos
+  internet.py    clima, noticias y preguntas sin clave de Claude
+  celular.py     servidor local de la app del celular (con código secreto)
+  ui/celular/    la página que abre el celular
   ui/            interfaz con tu diseño (HTML + CSS + JS)
 tests/           pruebas automáticas (python -m pytest)
 ```
@@ -218,6 +266,7 @@ tests/           pruebas automáticas (python -m pytest)
 ## Próximos pasos
 
 - Más señas (letras del abecedario) y gestos que tú mismo enseñes.
+- Usar la app del celular fuera de casa (con un túnel seguro).
 - Mover y copiar archivos por voz.
 - Un oído más preciso (Whisper local) para que entienda mejor frases largas.
 - Reconocimiento de tu voz para que solo te obedezca a ti.

@@ -66,7 +66,52 @@ def descargar_manos():
         print(f"\nAviso: no se pudo descargar el modelo de gestos ({e}).")
 
 
+URL_VOCES = "https://alphacephei.com/vosk/models/vosk-model-spk-0.4.zip"
+URL_CARAS = "https://github.com/opencv/opencv_zoo/raw/main/models/{carpeta}/{nombre}"
+CARAS = [("face_detection_yunet", "face_detection_yunet_2023mar.onnx"),
+         ("face_recognition_sface", "face_recognition_sface_2021dec.onnx")]
+
+
+def descargar_reconocer_voz():
+    """Modelo que distingue tu voz de la de otros (para «solo obedéceme a mí»). Opcional."""
+    destino = config.RAIZ / "modelos" / "vosk-model-spk-0.4"
+    if destino.exists():
+        return
+    zip_path = destino.parent / "spk.zip"
+    try:
+        urllib.request.urlretrieve(URL_VOCES, zip_path, progreso("Descargando el reconocedor de tu voz"))
+        with zipfile.ZipFile(zip_path) as z:
+            z.extractall(destino.parent)
+        print("\nReconocedor de voz listo.")
+    except Exception as e:
+        print(f"\nAviso: no se pudo descargar el reconocedor de voz ({e}).")
+    finally:
+        if zip_path.exists():
+            zip_path.unlink()
+
+
+def descargar_caras():
+    """Modelos para reconocer tu cara (seguridad y vigilancia). Opcionales."""
+    for carpeta, nombre in CARAS:
+        destino = config.RAIZ / "modelos" / nombre
+        if destino.exists():
+            continue
+        tmp = destino.with_suffix(".part")
+        try:
+            urllib.request.urlretrieve(URL_CARAS.format(carpeta=carpeta, nombre=nombre), tmp,
+                                       progreso(f"Descargando el reconocimiento de caras ({nombre[:14]})"))
+            if tmp.stat().st_size < 50_000:  # GitHub devolvió una página en vez del modelo
+                raise OSError("archivo incompleto")
+            tmp.rename(destino)
+            print()
+        except Exception as e:
+            tmp.unlink(missing_ok=True)
+            print(f"\nAviso: no se pudo descargar {nombre} ({e}).")
+
+
 if __name__ == "__main__":
     descargar_oido()
     descargar_voz()
     descargar_manos()
+    descargar_reconocer_voz()
+    descargar_caras()

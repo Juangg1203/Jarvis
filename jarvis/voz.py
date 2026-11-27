@@ -180,11 +180,13 @@ class Oyente:
         self.esta_hablando = esta_hablando          # fn() -> bool
         self._escuchar_ya = threading.Event()
         self.disponible = False
+        self.reconoce_hablante = False
         self.error = ""
 
-    def _entregar(self, texto):
+    def _entregar(self, texto, huella=None):
         # En otro hilo, para seguir oyendo (y poder interrumpir) mientras Jarvis piensa y habla.
-        threading.Thread(target=self.al_recibir_orden, args=(texto,), daemon=True).start()
+        # huella = (vector de la voz, cuadros) si está el modelo de hablantes, para saber si eres tú.
+        threading.Thread(target=self.al_recibir_orden, args=(texto, huella), daemon=True).start()
 
     def escuchar_ahora(self):
         """Como si hubieras dicho 'Jarvis' (botón del micrófono)."""
@@ -216,6 +218,15 @@ class Oyente:
         SetLogLevel(-1)
         modelo = Model(str(config.CARPETA_MODELO))
         rec = KaldiRecognizer(modelo, 16000)
+        self.reconoce_hablante = False
+        try:
+            from vosk import SpkModel
+            from .identidad import ruta_modelo_voz
+            if ruta_modelo_voz().exists():
+                rec.SetSpkModel(SpkModel(str(ruta_modelo_voz())))
+                self.reconoce_hablante = True
+        except Exception as e:
+            print(f"[voz] Sin reconocimiento de hablante: {e}")
         audio: queue.Queue = queue.Queue()
 
         def callback(datos, frames, tiempo, estado):
@@ -256,19 +267,21 @@ class Oyente:
                 continue
 
             if rec.AcceptWaveform(bloque):
-                texto = json.loads(rec.Result()).get("text", "").strip()
+                resultado = json.loads(rec.Result())
+                texto = resultado.get("text", "").strip()
                 if not texto:
                     continue
+                huella = (resultado["spk"], resultado.get("spk_frames", 0)) if resultado.get("spk") else None
                 resto = self._quitar_activacion(texto)
                 if escuchando:
                     if resto == "":  # solo dijiste "Jarvis": sigo esperando la orden
                         activo_hasta = time.monotonic() + config.ESPERA_ORDEN_SEG
                         continue
                     activo_hasta = 0.0
-                    self._entregar(resto if resto is not None else texto)
+                    self._entregar(resto if resto is not None else texto, huella)
                 elif resto is not None:
                     if resto:
-                        self._entregar(resto)
+                        self._entregar(resto, huella)
                     else:
                         activo_hasta = time.monotonic() + config.ESPERA_ORDEN_SEG
                         self.al_cambiar_estado("escuchando")

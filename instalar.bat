@@ -7,7 +7,8 @@ if not exist .venv python -m venv .venv
 call .venv\Scripts\activate.bat
 python -m pip install --upgrade pip
 pip install -r requirements.txt || (echo Hubo un error instalando las librerias. & pause & exit /b 1)
-echo Instalando los gestos con la camara (opcional)...
+echo Instalando la camara: gestos, tu cara y vigilancia (opcional)...
+pip install "opencv-python>=4.9" || echo Aviso: no se pudo instalar la camara.
 pip install -r requirements-gestos.txt || echo Aviso: no se pudieron instalar los gestos. Jarvis funciona igual sin ellos.
 python scripts\descargar_modelo.py || (echo No se pudo descargar los modelos de voz. & pause & exit /b 1)
 echo.

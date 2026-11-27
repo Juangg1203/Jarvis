@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 
 import os as _os
 
-from . import archivos, config, control, documentos, recordatorios, seguridad
+from . import archivos, config, control, documentos, internet, recordatorios, seguridad
 from .memoria import Memoria
 from .rutinas import Rutinas
 from .texto import extraer_numero, normalizar
@@ -58,6 +58,7 @@ class Cerebro:
         self.agenda = agenda if agenda is not None else recordatorios.Agenda()
         self.memoria = memoria if memoria is not None else Memoria()
         self.rutinas = rutinas if rutinas is not None else Rutinas()
+        self.manejadores_extra = []  # main.py añade aquí las órdenes de seguridad y del celular
 
     # ---------- punto de entrada ----------
     def procesar(self, texto: str, solo_ordenes: bool = False) -> Respuesta:
@@ -75,7 +76,7 @@ class Cerebro:
         if self.pendiente_accion:
             return self._confirmar_accion(t)
 
-        for manejador in (self._organizador, self._control, self._documentos):
+        for manejador in (*self.manejadores_extra, self._organizador, self._control, self._documentos, self._internet):
             r = manejador(texto, t, solo_ordenes)
             if r is not None:
                 return r
@@ -106,7 +107,9 @@ class Cerebro:
         if t in {"ayuda", "que puedes hacer", "que sabes hacer"}:
             return Respuesta("Puedo buscar y abrir archivos y aplicaciones, mandar archivos a la papelera, "
                              "ponerte recordatorios, alarmas y temporizadores, activar rutinas como el modo estudio, "
-                             "recordar cosas de ti, revisar el antivirus y bloquear el equipo.", "riendo")
+                             "recordar cosas de ti, resumir documentos, controlar el volumen, el brillo y el wifi, "
+                             "buscar el clima y las noticias, vigilar el computador cuando no estás "
+                             "y obedecer solo a tu voz.", "riendo")
 
         if m := _RE_BUSCAR.match(t):
             return self._buscar(m.group(1))
@@ -116,6 +119,47 @@ class Cerebro:
             return self._preparar_borrado(m.group(1))
 
         return Respuesta("No entendí esa orden. Di «ayuda» para ver lo que sé hacer.", "pensando", entendida=False)
+
+    # ---------- internet (sin Claude; con Claude lo responde él con su buscador) ----------
+    def ciudad(self) -> str:
+        if config.CIUDAD:
+            return config.CIUDAD
+        for d in reversed(self.memoria.datos):
+            m = re.search(r"\b(?i:vivo|vive|estoy|soy de|es de)\s+(?:en\s+)?([A-ZÁÉÍÓÚÑ][\wáéíóúñ]+(?:\s+[A-ZÁÉÍÓÚÑ][\wáéíóúñ]+)*)",
+                          d.get("texto", ""))
+            if m:
+                return m.group(1)
+        return ""
+
+    def _internet(self, original, t, solo_ordenes):
+        clima = re.search(r"\b(?:clima|pronostico|que tiempo hace|como esta el tiempo|va a llover|llovera|temperatura)\b", t)
+        noticias = re.search(r"\bnoticias?\b(?:\s+(?:de|del|sobre|acerca de)\s+(?:la |el |los |las )?(.+))?", t)
+        web = re.match(r"^(?:busca|buscame|investiga|consulta)\s+(?:en\s+)?(?:internet|google|la web|la red|linea)\s+(?:sobre\s+|acerca de\s+)?(.+)", t) \
+            or re.match(r"^(?:busca|buscame|investiga)\s+(.+?)\s+en\s+(?:internet|google|la web)$", t)
+        pregunta = re.match(r"^(?:que|quien|quienes|cual|cuales|cuando|donde|cuanto|cuanta|cuantos|como)\s+(?:es|son|fue|fueron|era|mide|pesa|vive|nacio|murio|invento|descubrio|gano|queda|esta)\s+(.+)", t)
+        if not (clima or noticias or web or pregunta):
+            return None
+        if solo_ordenes:
+            return Respuesta("", "pensando", entendida=False)  # Claude busca y responde mejor
+        if pregunta and not (clima or noticias or web) and re.search(r"\b(hora|dia|fecha|bateria|wifi|volumen|brillo)\b", t):
+            return None  # "qué hora es", "cómo está la batería": son órdenes locales
+        try:
+            if clima:
+                m = re.search(r"\ben\s+([a-z ]+?)(?:\s+(?:hoy|manana|ahora))?$", t)
+                lugar = m.group(1) if m and m.group(1) not in {"la calle", "la casa", "casa"} else self.ciudad()
+                return Respuesta(internet.clima(lugar, manana="manana" in t), "normal")
+            if noticias:
+                return Respuesta(internet.noticias((noticias.group(1) or "").strip()), "pensando")
+            consulta = (web or pregunta).group(1) if (web or pregunta) else t
+            if pregunta and not web:
+                consulta = t
+            texto = internet.preguntar(consulta)
+            if texto:
+                return Respuesta(texto, "guino")
+            internet.abrir_en_navegador(consulta)
+            return Respuesta("No encontré una respuesta corta; te abrí la búsqueda en el navegador.", "pensando")
+        except Exception:
+            return Respuesta("No pude conectarme a internet para buscar eso.", "preocupado")
 
     # ---------- recordatorios, rutinas y memoria ----------
     def _organizador(self, original, t, solo_ordenes):

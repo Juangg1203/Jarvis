@@ -14,6 +14,11 @@ POR_DEFECTO = {
     "voz_edge": "es-CO-GonzaloNeural",
     "modo_conversacion": True,  # tras responder, sigue escuchando sin tener que decir "Jarvis"
     "gestos_al_iniciar": False,  # encender la cámara para los gestos al abrir Jarvis
+    "solo_dueno": False,         # solo obedece órdenes de voz de tu voz o con tu cara frente a la cámara
+    "avisos_seguridad": True,    # avisar de memorias USB nuevas y disco casi lleno
+    "celular": False,            # app del celular por el wifi de casa
+    "codigo_celular": "",        # código secreto que guarda el celular al escanear el QR
+    "tema": "aurora",            # colores: aurora | oceano | esmeralda | atardecer
 }
 
 

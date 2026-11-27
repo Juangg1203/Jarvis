@@ -18,7 +18,8 @@ from jarvis.comandos import Cerebro, Respuesta
 from jarvis.ia import Conversador
 from jarvis.memoria import Memoria
 from jarvis.rutinas import Rutinas
-from jarvis import control, gestos
+from jarvis import celular, control, gestos, identidad, seguridad, vigilancia
+from jarvis.texto import normalizar
 from jarvis.voz import Hablante, Oyente
 
 UI = Path(__file__).resolve().parent / "ui"
@@ -37,15 +38,41 @@ class Jarvis:
         self.dormido = False
         self._lock = threading.Lock()
         self._ultimo_nivel = 0.0
+        # v5: seguridad, celular
+        self.identidad = identidad.Identidad()
+        self._caras_det = None
+        self.vigilante = vigilancia.Vigilante(self.camara, self.identidad,
+                                              al_intruso=self._intruso, al_volver=self._dueno_volvio)
+        self.monitor = vigilancia.Monitor(self._alerta_seguridad)
+        self.monitor.activo = self.ajustes.get("avisos_seguridad", True)
+        self.celular = None
+        self._silencio = False      # True mientras responde al celular (no habla por los parlantes del PC)
+        self._salida = None         # lo que se le responde al celular
+        self._estado_ui = {"estado": "esperando", "expresion": "normal"}
+        self._aprendiendo_voz, self._huellas_voz = 0, []
+        self.cerebro.manejadores_extra.append(self._ordenes_seguridad)
         self.oyente = Oyente(
             al_cambiar_estado=self._estado_voz,
-            al_recibir_orden=self.ejecutar,
+            al_recibir_orden=self._orden_de_voz,
             esta_hablando=self.hablante.hablando.is_set,
             al_oir_parcial=lambda t: self._ui(estado="escuchando", parcial=t),
         )
 
     # ---------- comunicación con la interfaz ----------
     def _ui(self, **datos):
+        if "estado" in datos:
+            self._estado_ui["estado"] = datos["estado"]
+        if datos.get("expresion"):
+            self._estado_ui["expresion"] = datos["expresion"]
+        salida = self._salida
+        if salida is not None:
+            if datos.get("expresion"):
+                salida["expresion"] = datos["expresion"]
+            if datos.get("respuesta_parcial"):
+                salida["respuesta"] = datos["respuesta_parcial"]
+            for k in ("respuesta", "mensaje"):
+                if datos.get(k):
+                    salida["respuesta"] = (salida["respuesta"] + " " + datos[k]).strip() if k == "mensaje" else datos[k]
         if self.ventana:
             try:
                 self.ventana.evaluate_js(f"window.jarvis && window.jarvis.actualizar({json.dumps(datos)})")
@@ -73,7 +100,9 @@ class Jarvis:
         self._ui(estado=estado)
 
     def _al_terminar_de_hablar(self):
-        if self.dormido:
+        if self._aprendiendo_voz and self.oyente.disponible:
+            self.oyente.escuchar_ahora()  # esperando la siguiente frase para aprender tu voz
+        elif self.dormido:
             self._ui(estado="dormido")
         elif self.ajustes.get("modo_conversacion") and self.oyente.disponible:
             self.oyente.escuchar_ahora()  # sigue la charla sin repetir "Jarvis"
@@ -94,6 +123,8 @@ class Jarvis:
                  avisos=len(self.agenda.pendientes()))
         self.hablante.decir(texto)
         self.hablante.despues(lambda: self._ui(estado="esperando"))
+        if self.celular:
+            self.celular.alerta("⏰ " + texto)
         if item.get("tipo") == "alarma":
             # La alarma se repite hasta 3 veces si no le haces caso.
             self._alarma_activa = item["id"]
@@ -113,12 +144,37 @@ class Jarvis:
         self._ui(avisos=len(self.agenda.pendientes()))
 
     # ---------- cerebro ----------
-    def ejecutar(self, texto: str):
+    def _decir(self, texto):
+        if not self._silencio:
+            self.hablante.decir(texto)
+
+    def _despues(self, funcion):
+        if self._silencio:
+            self._ui(estado="esperando")
+        else:
+            self.hablante.despues(funcion)
+
+    def responder_celular(self, texto):
+        """Orden que llega desde la app del celular: se hace en el PC y la respuesta vuelve al teléfono."""
+        salida = self.ejecutar(texto, origen="celular") or {}
+        return {"respuesta": salida.get("respuesta") or "Listo.", "expresion": salida.get("expresion") or "normal"}
+
+    def ejecutar(self, texto: str, origen="pc"):
         self._alarma_activa = None  # cualquier orden apaga la alarma que esté sonando
         with self._lock:
-            self.hablante.callar()
-            self._ui(estado="pensando", orden=texto)
-            from jarvis.texto import normalizar
+            self._silencio = origen == "celular"
+            self._salida = {"respuesta": "", "expresion": "normal"} if self._silencio else None
+            try:
+                self._ejecutar(texto, origen)
+            finally:
+                salida, self._salida, self._silencio = self._salida, None, False
+        return salida
+
+    def _ejecutar(self, texto, origen):
+        if True:
+            if not self._silencio:
+                self.hablante.callar()
+            self._ui(estado="pensando", orden=("📱 " if origen == "celular" else "") + texto)
             t = normalizar(texto)
             if re.search(r"\b(?:gestos|senas|camara)\b", t) and re.match(r"^(?:activa|enciende|prende|usa|desactiva|apaga|quita|deja de usar)", t):
                 encender = bool(re.match(r"^(?:activa|enciende|prende|usa)", t))
@@ -126,8 +182,8 @@ class Jarvis:
                 msg = ("Listo, te estoy mirando para los gestos: palma abierta para hablarme, puño para silencio, "
                        "pulgar arriba o abajo para sí o no." if encender else "Apagué la cámara.")
                 self._ui(estado="hablando", expresion="guino", respuesta=msg)
-                self.hablante.decir(msg)
-                self.hablante.despues(self._al_terminar_de_hablar)
+                self._decir(msg)
+                self._despues(self._al_terminar_de_hablar)
                 return
             hay_claude = self.conversador.disponible()
             r = self.cerebro.procesar(texto, solo_ordenes=hay_claude)
@@ -139,8 +195,8 @@ class Jarvis:
             self.dormido = r.dormir
             self._ui(estado="hablando", expresion=r.expresion, respuesta=r.texto,
                      resultados=[{"nombre": os.path.basename(p), "ruta": p} for p in r.resultados])
-            self.hablante.decir(r.texto)
-            self.hablante.despues(self._al_terminar_de_hablar)
+            self._decir(r.texto)
+            self._despues(self._al_terminar_de_hablar)
             self._avisos_cambiaron()
 
     def _conversar(self, texto):
@@ -152,7 +208,7 @@ class Jarvis:
             if not estado["empezo"]:
                 estado["empezo"] = True
                 self._ui(estado="hablando")
-            self.hablante.decir(frase)
+            self._decir(frase)
 
         try:
             self.conversador.responder(
@@ -178,11 +234,218 @@ class Jarvis:
         except Exception as e:
             print(f"[jarvis] Error con Claude: {e}")
             self._avisar("Algo salió mal al pensar la respuesta.", "triste")
-        self.hablante.despues(self._al_terminar_de_hablar)
+        self._despues(self._al_terminar_de_hablar)
 
     def _avisar(self, texto, expresion):
         self._ui(estado="hablando", expresion=expresion, respuesta=texto)
-        self.hablante.decir(texto)
+        self._decir(texto)
+
+    # ---------- seguridad: solo el dueño, vigilancia, USB y disco ----------
+    def _anunciar(self, texto, cara="preocupado", hablar=True):
+        """Aviso que Jarvis da por su cuenta (no es respuesta a una orden)."""
+        self._ui(estado="hablando", expresion=cara, respuesta=texto, aviso=True)
+        if self.celular:
+            self.celular.alerta(texto)
+        if hablar:
+            self.hablante.decir(texto)
+        self.hablante.despues(lambda: self._ui(estado="esperando"))
+
+    def _alerta_seguridad(self, tipo, texto, dato):
+        if tipo == "usb":
+            def revisar():
+                threading.Thread(target=lambda: self._anunciar(vigilancia.analizar_usb(dato), "guino"),
+                                 daemon=True).start()
+                return "Empiezo a revisarla. Te aviso cuando termine."
+            r = self.cerebro.pedir_confirmacion(texto, revisar, "sorprendido")
+            self._anunciar(r.texto, r.expresion)
+        else:
+            self._anunciar(texto, "preocupado")
+
+    def _detector_caras(self):
+        if self._caras_det is None:
+            try:
+                self._caras_det = identidad.Caras()
+            except Exception as e:
+                print(f"[seguridad] Sin detector de caras: {e}")
+                return None
+        return self._caras_det
+
+    def _ve_al_dueno(self) -> bool:
+        caras = self._detector_caras()
+        if not caras or not caras.reconoce or not self.identidad.conoce_cara:
+            return False
+        cuadro = self.camara.foto()
+        return cuadro is not None and any(self.identidad.es_mi_cara(h) for _, h in caras.huellas(cuadro))
+
+    def _es_el_dueno(self, huella) -> bool:
+        if not (self.identidad.conoce_voz or self.identidad.conoce_cara):
+            return True  # aún no le has enseñado tu voz ni tu cara
+        if self.identidad.conoce_voz and huella and self.identidad.es_mi_voz(*huella):
+            return True
+        return self._ve_al_dueno()
+
+    def _orden_de_voz(self, texto, huella=None):
+        if self._aprendiendo_voz:
+            return self._muestra_de_voz(huella)
+        if self.ajustes.get("solo_dueno") and not self._es_el_dueno(huella):
+            seguridad.registrar("voz_rechazada", texto)
+            msg = f"No reconozco tu voz. Solo le hago caso a {config.NOMBRE_USUARIO}."
+            self._ui(estado="hablando", expresion="enojado", orden=texto, respuesta=msg)
+            self.hablante.decir(msg)
+            self.hablante.despues(lambda: self._ui(estado="esperando"))
+            return
+        self.ejecutar(texto)
+
+    def _muestra_de_voz(self, huella):
+        if huella and huella[1] >= identidad.Identidad.MIN_CUADROS_VOZ:
+            self._huellas_voz.append(huella[0])
+            self._aprendiendo_voz -= 1
+            if not self._aprendiendo_voz:
+                self.identidad.guardar_voz(self._huellas_voz)
+                seguridad.registrar("voz_registrada", str(len(self._huellas_voz)))
+                return self._anunciar("Listo, ya conozco tu voz. Activa «solo obedéceme a mí» cuando quieras.",
+                                      "riendo")
+            msg = ["Perfecto. Ahora otra frase, por ejemplo: hoy quiero escuchar música.",
+                   "Muy bien. Una última: Jarvis, revisa mis recordatorios de mañana."][min(1, 2 - self._aprendiendo_voz)]
+        else:
+            msg = "Esa frase fue muy corta. Dime una un poco más larga."
+        self._ui(estado="hablando", expresion="guino", respuesta=msg)
+        self.hablante.decir(msg)
+        self.hablante.despues(self.oyente.escuchar_ahora)
+
+    def _aprender_cara(self):
+        caras = self._detector_caras()
+        if not caras or not caras.reconoce:
+            return self._anunciar("Me faltan los modelos de caras. Vuelve a ejecutar instalar.bat.", "triste")
+        huellas = []
+        for _ in range(12):
+            cuadro = self.camara.foto()
+            encontradas = caras.huellas(cuadro) if cuadro is not None else []
+            if len(encontradas) == 1:
+                huellas.append(encontradas[0][1])
+            if len(huellas) >= 5:
+                break
+            time.sleep(0.4)
+        if len(huellas) < 3:
+            return self._anunciar("No logré verte bien. Ponte frente a la cámara, con buena luz y solo tú, "
+                                  "y dime otra vez «aprende mi cara».", "preocupado")
+        self.identidad.guardar_cara(huellas)
+        seguridad.registrar("cara_registrada", str(len(huellas)))
+        self._anunciar("Listo, ya conozco tu cara.", "riendo")
+
+    def _intruso(self, ruta):
+        self._ui(intrusos=len(self.vigilante.fotos))
+        if self.celular:
+            self.celular.alerta("📸 Alguien está usando tu computador. Le tomé una foto y lo bloqueé.")
+        seguridad.bloquear_equipo()
+
+    def _dueno_volvio(self, fotos):
+        n = len(fotos)
+        texto = (f"Bienvenido, {config.NOMBRE_USUARIO}. Mientras no estabas no pasó nada." if not n else
+                 f"Bienvenido, {config.NOMBRE_USUARIO}. Mientras no estabas vi a alguien "
+                 f"{'una vez' if n == 1 else f'{n} veces'}. Guardé las fotos; di «muéstrame las fotos» para verlas.")
+        self._ui(vigilando=False)
+        self._anunciar(texto, "riendo" if not n else "preocupado")
+
+    def vigilar(self, encender=True) -> str:
+        if encender:
+            try:
+                self.vigilante.activar()
+            except Exception as e:
+                return f"No pude encender la cámara para vigilar: {e}"
+            self._ui(vigilando=True)
+            if self.celular:
+                self.celular.alerta("🛡️ Vigilancia activada.")
+            extra = "" if self.identidad.conoce_cara else " Como aún no conozco tu cara, cuando vuelvas dime «ya volví»."
+            return ("Vigilancia activada. Tienes veinte segundos para irte. Si alguien usa el computador, "
+                    "le tomo una foto y lo bloqueo." + extra)
+        fotos = self.vigilante.desactivar()
+        self._ui(vigilando=False)
+        if not fotos:
+            return "Vigilancia apagada. No pasó nada mientras no estabas."
+        return (f"Vigilancia apagada. Tomé {len(fotos)} {'foto' if len(fotos) == 1 else 'fotos'} de alguien que usó "
+                "el computador. Di «muéstrame las fotos» para verlas.")
+
+    def ver_fotos(self) -> str:
+        carpeta = vigilancia.carpeta_intrusos()
+        if not carpeta.exists() or not any(carpeta.iterdir()):
+            return "No hay fotos de intrusos."
+        if sys.platform == "win32":
+            os.startfile(str(carpeta))
+        return "Te abrí la carpeta de fotos."
+
+    def activar_celular(self, encender=True) -> str:
+        if not encender:
+            if self.celular:
+                self.celular.detener()
+            self.celular = None
+            return "Apagué la app del celular."
+        if not self.ajustes.get("codigo_celular"):
+            self.ajustes = ajustes.guardar({"codigo_celular": celular.nuevo_codigo()})
+        if self.celular is None:
+            self.celular = celular.Servidor(
+                self.responder_celular,
+                lambda: {**self._estado_ui, "vigilando": self.vigilante.activa},
+                self.ajustes["codigo_celular"])
+        if not self.celular.iniciar():
+            self.celular = None
+            return "No pude abrir la conexión para el celular. ¿Otro programa usa el puerto?"
+        return "La app del celular está lista. Abre Ajustes y escanea el código QR con tu celular."
+
+    def _ordenes_seguridad(self, original, t, solo_ordenes):
+        """Órdenes de seguridad y del celular (se revisan antes que las demás)."""
+        if re.search(r"\b(?:aprende|aprender|memoriza|registra|graba|reconoce)\s+(?:a\s+)?(?:mi|como es mi)\s+voz\b", t):
+            if not self.oyente.reconoce_hablante:
+                return Respuesta("Me falta el modelo para reconocer voces. Vuelve a ejecutar instalar.bat.", "triste")
+            self._aprendiendo_voz, self._huellas_voz = 3, []
+            return Respuesta("Vamos a aprender tu voz. Dime tres frases, una a la vez. La primera: "
+                             "hola Jarvis, soy yo y este es mi computador.", "guino")
+        if re.search(r"\b(?:aprende|aprender|memoriza|registra|reconoce)\s+(?:a\s+)?mi\s+(?:cara|rostro)\b", t):
+            threading.Thread(target=self._aprender_cara, daemon=True).start()
+            return Respuesta("Mírame a la cámara unos segundos, sin moverte mucho.", "sorprendido")
+        if m := re.search(r"\b(?:olvida|borra)\s+(?:mi|como es mi)\s+(voz|cara|rostro)\b", t):
+            self.identidad.olvidar("voz" if m.group(1) == "voz" else "cara")
+            return Respuesta(f"Listo, olvidé tu {m.group(1)}.", "normal")
+        if re.search(r"\bsolo\s+(?:obedeceme|hazme caso|escuchame)\b|\b(?:obedeceme|hazme caso) solo a mi\b|\bactiva (?:el modo )?solo yo\b", t):
+            if not (self.identidad.conoce_voz or self.identidad.conoce_cara):
+                return Respuesta("Primero tengo que conocerte. Di «aprende mi voz» o «aprende mi cara».", "pensando")
+            self.ajustes = ajustes.guardar({"solo_dueno": True})
+            return Respuesta(f"Hecho. Desde ahora solo le hago caso a la voz de {config.NOMBRE_USUARIO}.", "guino")
+        if re.search(r"\b(?:obedece|hazle caso|escucha) a todos\b|\bdesactiva (?:el modo )?solo yo\b", t):
+            self.ajustes = ajustes.guardar({"solo_dueno": False})
+            return Respuesta("Listo, ahora le hago caso a cualquiera.", "normal")
+        if re.search(r"\b(?:vigila|cuida|protege)\s+(?:el|mi)\s+(?:computador|pc|portatil|equipo|computadora)\b"
+                     r"|\b(?:activa|enciende|pon)\s+(?:la|el modo)\s+vigilancia\b|^modo vigilancia$", t):
+            return Respuesta(self.vigilar(True), "guino")
+        if re.search(r"\b(?:desactiva|apaga|quita)\s+(?:la\s+)?vigilancia\b|\bdeja de vigilar\b|^ya volvi\b|^volvi$", t):
+            if not self.vigilante.activa:
+                return Respuesta("La vigilancia no estaba activada." if "vigil" in t else "¡Qué bueno verte!", "riendo")
+            return Respuesta(self.vigilar(False), "riendo")
+        if re.search(r"\b(?:muestrame|ensename|abre|ver)\s+(?:las\s+)?fotos\b|\bfotos de (?:los )?intrusos\b", t):
+            return Respuesta(self.ver_fotos(), "normal")
+        if re.search(r"\b(?:revisa|analiza|escanea)\s+(?:la|las|mi|mis)\s+(?:memoria|memorias|usb)\b", t):
+            unidades = list(vigilancia.unidades_removibles())
+            if not unidades:
+                return Respuesta("No veo ninguna memoria USB conectada.", "pensando")
+            threading.Thread(target=lambda: self._anunciar(vigilancia.analizar_usb(unidades[-1]), "guino"),
+                             daemon=True).start()
+            return Respuesta("Empiezo a revisarla con el antivirus. Te aviso cuando termine.", "pensando")
+        if re.search(r"\blibera(?:r)?\s+espacio\b|\blimpia(?:r)?\s+el\s+disco\b", t):
+            return Respuesta(vigilancia.liberar_espacio(), "guino")
+        if re.search(r"\b(?:espacio|como esta)\s+(?:en\s+)?(?:el\s+)?disco\b|\bdisco lleno\b", t):
+            llenos = vigilancia.discos_llenos(umbral=1)
+            if not llenos:
+                return Respuesta("No pude leer el disco.", "pensando")
+            u, usado, libres = llenos[0]
+            return Respuesta(f"El disco {vigilancia.nombre_unidad(u)} está al {usado} por ciento y quedan {libres} gigas libres.",
+                             "preocupado" if usado >= config.DISCO_LLENO_PORCENTAJE else "guino")
+        if re.search(r"\b(?:activa|conecta|enciende|abre)\s+(?:la app del |el )?celular\b", t):
+            self.ajustes = ajustes.guardar({"celular": True})
+            return Respuesta(self.activar_celular(True), "guino")
+        if re.search(r"\b(?:desactiva|desconecta|apaga)\s+(?:la app del |el )?celular\b", t):
+            self.ajustes = ajustes.guardar({"celular": False})
+            return Respuesta(self.activar_celular(False), "normal")
+        return None
 
     # ---------- bandeja del sistema (segundo plano) ----------
     def mostrar(self):
@@ -253,11 +516,11 @@ class Jarvis:
                 self.ventana.hide()
 
     def mostrar_u_ocultar_gestos(self, encender=None):
-        encender = (not self.camara.activa) if encender is None else encender
+        encender = (not self.camara.gestos_activos) if encender is None else encender
         if encender:
-            self.camara.iniciar()
+            self.camara.iniciar("gestos")
         else:
-            self.camara.detener()
+            self.camara.detener("gestos")
         return encender
 
     # ---------- arrastrar documentos a la ventana ----------
@@ -290,7 +553,10 @@ class Jarvis:
             self._activar_soltar_archivos()
             self.oyente.iniciar()
             if self.ajustes.get("gestos_al_iniciar"):
-                self.camara.iniciar()
+                self.camara.iniciar("gestos")
+            self.monitor.iniciar()
+            if self.ajustes.get("celular"):
+                self.activar_celular(True)
             time.sleep(0.5)
             self._avisos_cambiaron()
             self._ui(estado="hablando", expresion="riendo")
@@ -360,22 +626,65 @@ class Api:
     def leer_ajustes(self):
         a = ajustes.cargar()
         clave = ajustes.clave_claude()
-        return {
+        j = self._j
+        datos = {
             "tiene_clave": bool(clave),
             "clave_final": clave[-4:] if clave else "",
             "voz_motor": a["voz_motor"],
             "modo_conversacion": a["modo_conversacion"],
             "gestos_al_iniciar": a.get("gestos_al_iniciar", False),
             "nombre": config.NOMBRE_USUARIO,
+            "tema": a.get("tema", "aurora"),
+            "solo_dueno": a.get("solo_dueno", False),
+            "avisos_seguridad": a.get("avisos_seguridad", True),
+            "conoce_voz": j.identidad.conoce_voz,
+            "conoce_cara": j.identidad.conoce_cara,
+            "vigilando": j.vigilante.activa,
+            "celular": a.get("celular", False),
+            "celular_activo": bool(j.celular and j.celular.activo),
         }
+        if j.celular and j.celular.activo:
+            datos["celular_direccion"] = j.celular.direccion
+            datos["celular_qr"] = celular.qr_svg(j.celular.enlace())
+        return datos
 
     def guardar_ajustes(self, cambios):
         cambios = dict(cambios or {})
         if not cambios.get("anthropic_api_key"):
             cambios.pop("anthropic_api_key", None)  # campo vacío = conservar la clave actual
+        cambios.pop("codigo_celular", None)
+        antes = ajustes.cargar()
         a = ajustes.guardar(cambios)
-        self._j.ajustes = a
-        self._j.hablante.motor = a["voz_motor"]
+        j = self._j
+        j.ajustes = a
+        j.hablante.motor = a["voz_motor"]
+        j.monitor.activo = a.get("avisos_seguridad", True)
+        if a.get("celular") != antes.get("celular") or (a.get("celular") and not j.celular):
+            j.activar_celular(bool(a.get("celular")))
+        return self.leer_ajustes()
+
+    def nuevo_codigo_celular(self):
+        """Cambia el código: los celulares vinculados dejan de funcionar hasta escanear el QR nuevo."""
+        j = self._j
+        j.ajustes = ajustes.guardar({"codigo_celular": celular.nuevo_codigo()})
+        if j.celular:
+            j.celular.codigo = j.ajustes["codigo_celular"]
+        return self.leer_ajustes()
+
+    def orden(self, texto):
+        """Botones de seguridad del panel: se ejecutan como si los dijeras."""
+        self.enviar_texto(texto)
+
+    def vigilancia(self, encender=None):
+        j = self._j
+        encender = (not j.vigilante.activa) if encender is None else encender
+        self.enviar_texto("vigila el computador" if encender else "desactiva la vigilancia")
+        return encender
+
+    def olvidar_identidad(self, que):
+        self._j.identidad.olvidar(que)
+        if not (self._j.identidad.conoce_voz or self._j.identidad.conoce_cara):
+            self._j.ajustes = ajustes.guardar({"solo_dueno": False})
         return self.leer_ajustes()
 
 
