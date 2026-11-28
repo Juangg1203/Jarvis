@@ -290,6 +290,7 @@ def test_pedidos_de_documento_en_word(monkeypatch):
                   "hazme un word sobre los volcanes", "necesito un documento de word acerca de la celula"):
         m = r.match(frase)
         assert m and m.group(3), frase
+    assert r.match("crea un documento en rod sobre los volcanes").group(3)
     m = r.match("crea el documento en word")
     assert m and not m.group(3)
 

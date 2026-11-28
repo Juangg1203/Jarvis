@@ -511,7 +511,7 @@ class Jarvis:
         r"^(?:(?:si|bueno|ok|dale|ahora|oye)\s+)?(?:crea|creame|haz|hazme|escribe|escribeme|redacta|redactame|genera|"
         r"generame|elabora|prepara|preparame|necesito|quiero)\s+(?:un |una |el |la |mi )?(?:nuevo |nueva )?"
         r"(documento|archivo|word|resumen|ensayo|informe|tarea|trabajo|texto|articulo|reporte|exposicion|"
-        r"presentacion escrita)(?:\s+(?:nuevo|nueva|de word|en word|word))?"
+        r"presentacion escrita)(?:\s+(?:nuevo|nueva|(?:de |en )?(?:word|wor|guord|rod|wrod|ward)))?"
         r"(?:\s+(sobre|acerca de|del|de|con|para|que hable de|que trate de|que trate sobre)\s+(.+))?$")
 
     def _escribir_documento(self, pedido, titulo=""):
